@@ -1,4 +1,4 @@
-module WXDemo where
+module Main where
 
 import           WX
 
@@ -30,4 +30,3 @@ fetchMetar icao = do
   where
         url = "http://weather.noaa.gov/pub/data/observations/metar/stations/" ++ icao ++ ".TXT"
         relLine s = Prelude.lines s !! 1
-
