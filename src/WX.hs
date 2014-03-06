@@ -11,6 +11,7 @@ import           Data.Text
 data Weather = METAR {
   date        :: Date,
   station     :: Station,
+  flags       :: [Flag],
   wind        :: Wind,
   visibility  :: Visibility,
   wx          :: WeatherPhenomena,
@@ -27,6 +28,9 @@ data Weather = METAR {
              | SIGMET
              | GAMET
              deriving (Eq, Show)
+
+data Flag = COR | AMD | AUTO
+        deriving (Eq, Show)
 
 data Trend = BECMG Changes
            | TEMPO Changes
@@ -183,6 +187,9 @@ perhaps_ parser = void $ perhaps parser
 means :: Text -> a -> Parser a
 a `means` b = string a >> return b
 
+means' :: Text -> a -> Parser a
+a `means'` b = try $ skipSpace >> string a >> skipSpace >> return b
+
 descParser :: Parser WPDesc
 descParser = choice ["MI" `means` Shallow,
               "BC" `means` Patches,
@@ -283,19 +290,25 @@ tdParser = do
   dewpoint <- (\pm a b -> read (pm ++ [a, b]) :: Int) <$> perhapsMinus <*> digit <*> digit
   return (tmpr, dewpoint)
 
+flagsParser :: Parser [Flag]
+flagsParser = many' $ choice ["COR" `means'` COR,
+                              "AMD" `means'` AMD,
+                              "AUTO" `means'` AUTO]
+
 metarParser :: Parser Weather
 metarParser = do
   _ <- string "METAR"
-  identifier <- spc >> stationParser
-  reportdate <- spc >> dateParser
-  reportwind <- spc >> windParser
-  spc
+  reportflags <- flagsParser
+  identifier <- skipSpace >> stationParser
+  reportdate <- skipSpace >> dateParser
+  reportwind <- skipSpace >> windParser
+  skipSpace
   reportvis <- option TenOrMore visibilityParser
   reportwx <- checksigwx <$> many' wxParser
   reportclouds <- many' spc >> cloudParser
   (reporttemp, reportdewpoint) <- spc >> tdParser
   reportpressure <- spc >> pressureParser
-  return $ METAR reportdate identifier reportwind reportvis reportwx reportclouds reportpressure reporttemp reportdewpoint reporttrend
+  return $ METAR reportdate identifier reportflags reportwind reportvis reportwx reportclouds reportpressure reporttemp reportdewpoint reporttrend
     where
       spc = skipMany1 space
       checksigwx :: [WeatherPhenomenon] -> WeatherPhenomena
