@@ -6,7 +6,7 @@ import           Control.Applicative
 import           Control.Monad
 import           Data.Attoparsec.Text
 import           Data.Maybe
-import           Data.Text
+import           Data.Text(Text)
 
 data Weather = METAR {
   date        :: Date,
@@ -14,8 +14,8 @@ data Weather = METAR {
   flags       :: [Flag],
   wind        :: Wind,
   visibility  :: Visibility,
-  wx          :: WeatherPhenomena,
-  clouds      :: CloudInfo,
+  wx          :: [WeatherPhenomenon],
+  clouds      :: [Cloud],
   pressure    :: Pressure,
   temperature :: Int,
   dewPoint    :: Int,
@@ -46,9 +46,6 @@ data Pressure = QNH Int
               | QFE Int
               deriving (Eq, Show)
 
-data WeatherPhenomena = NSW
-                      | SIGWX [WeatherPhenomenon]
-                      deriving (Eq, Show)
 data WeatherPhenomenon = Phenomenon {
   intensity :: WPIntensity,
   desc      :: Maybe WPDesc,
@@ -78,8 +75,11 @@ data WPOther = DustOrSandwhirls | Squalls | Tornado
              | Sandstorm | Duststorm
              deriving (Enum, Eq, Ord, Show)
 
+data Distance = Metres Int | KM Int | SM Int | NM Int
+        deriving (Eq, Show)
+
 data Visibility = TenOrMore
-                | Meters Int deriving (Eq, Show)
+                | Visibility Distance deriving (Eq, Show)
 
 data Date = Date Int Int Int deriving (Eq, Show)
 
@@ -92,7 +92,7 @@ data Vertical = Height Int
 
 data Wind = Wind {
   direction :: WindDirection,
-  velocity  :: (Int, Unit),
+  velocity  :: Unit,
   gusts     :: Maybe Int
   } deriving (Eq, Show)
 
@@ -105,12 +105,8 @@ data WindDirection = Variable
                      }
                    deriving (Eq, Show)
 
-data Unit = Knots | Miles | KMH deriving (Eq, Show)
-
-data CloudInfo = CAVOK
-               | NoSignificantClouds
-               | Clouds [Cloud]
-               deriving (Eq, Show)
+data Unit = Knots Int | Miles Int | KMH Int
+        deriving (Eq, Show)
 
 data Cloud = Cloud Cover Vertical CloudType deriving (Eq, Show)
 
@@ -149,7 +145,7 @@ windParser = do
   gustsies <- option Nothing readgusts
   unit <- readunit
   dir2 <- option dir $ char ' ' >> variableWindParser dir
-  return $ Wind dir2 (str, unit) gustsies
+  return $ Wind dir2 (unit str) gustsies
     where
       variablewind = "VRB" `means` Variable
       readwinddir = (\a b c -> Degrees . read $ [a, b, c]) <$> digit <*> digit <*> digit
@@ -167,7 +163,7 @@ pressureParser = choice [qnh, mmhg]
 
 wxParser :: Parser WeatherPhenomenon
 wxParser = do
-  perhaps_ space
+  skipSpace
   intsy <- intensityParser
   dsc <- perhaps descParser
   prc <- perhaps precipitationParser
@@ -241,18 +237,18 @@ visibilityParser :: Parser Visibility
 visibilityParser = choice [tenormore, metres, arb]
   where
     tenormore = string "9999" >> return TenOrMore
-    metres = (\a b c d -> Meters $ read [a, b, c, d]) <$> digit <*> digit <*> digit <*> digit
-    arb = (\a b unit -> Meters $ factorMW unit $ read [a, b]) <$> digit <*> digit <*> choice [string "KM",
-                                                                                              string "SM"]
-factorMW :: Text -> Int -> Int
-factorMW = factorMWS
-factorMWS :: Text -> Int -> Int
-factorMWS "KM" n = n
-factorMWS "SM" n = round $ toRational n * 1.609344
-factorMWS _ _    = undefined
+    metres = (\a b c d -> Visibility (visunit $ read [a,b,c,d])) <$> digit <*> digit <*> digit <*> digit
+    visunit :: Int -> Distance
+    visunit n = if n > 5000
+        then KM (n `quot` 1000)
+        else Metres n
+    arb = (\a b unit -> Visibility (unit $ read [a,b])) <$> digit <*> digit <*> distanceUnitParser
 
-cloudParser :: Parser CloudInfo
-cloudParser = choice [ nsc, cavok, Clouds <$> many' clds]
+distanceUnitParser :: Parser (Int -> Distance)
+distanceUnitParser = choice ["KM" `means` KM, "SM" `means` SM, "NM" `means` NM]
+
+cloudParser :: Parser [Cloud]
+cloudParser = choice [nsc, cavok, many' clds]
     where
       clds = do
         perhaps_ space
@@ -260,8 +256,8 @@ cloudParser = choice [ nsc, cavok, Clouds <$> many' clds]
         height <- (\a b c -> Height $ (* 100) $ read [a, b, c]) <$> digit <*> digit <*> digit
         cloudType <- cloudTypeParser
         return $ Cloud intsy height cloudType
-      cavok = maybeOneSpace >> "CAVOK" `means` CAVOK
-      nsc = maybeOneSpace >> "NSC" `means` NoSignificantClouds
+      cavok = skipSpace >> "CAVOK" `means` []
+      nsc = skipSpace >> "NSC" `means` []
 
 cloudIntensityParser :: Parser Cover
 cloudIntensityParser = choice ["FEW" `means` FEW,
@@ -303,17 +299,14 @@ metarParser = do
   reportdate <- skipSpace >> dateParser
   reportwind <- skipSpace >> windParser
   skipSpace
-  reportvis <- option TenOrMore visibilityParser
-  reportwx <- checksigwx <$> many' wxParser
-  reportclouds <- many' spc >> cloudParser
-  (reporttemp, reportdewpoint) <- spc >> tdParser
-  reportpressure <- spc >> pressureParser
+  reportvis <- TenOrMore `option` visibilityParser
+  reportwx <- many' wxParser
+  reportclouds <- skipSpace >> cloudParser
+  (reporttemp, reportdewpoint) <- skipSpace >> tdParser
+  reportpressure <- skipSpace >> pressureParser
+  _ <- choice $ map char ['=', '$']
   return $ METAR reportdate identifier reportflags reportwind reportvis reportwx reportclouds reportpressure reporttemp reportdewpoint reporttrend
     where
-      spc = skipMany1 space
-      checksigwx :: [WeatherPhenomenon] -> WeatherPhenomena
-      checksigwx [] = NSW
-      checksigwx reportwx = SIGWX reportwx
       reporttrend = NOTAVAIL
 
 
