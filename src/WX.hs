@@ -6,20 +6,24 @@ import           Control.Applicative
 import           Control.Monad
 import           Data.Attoparsec.Text
 import           Data.Maybe
-import           Data.Text(Text)
+import           Data.Text            (Text, pack)
+
+import           System.IO.Unsafe
 
 data Weather = METAR {
   date        :: Date,
   station     :: Station,
   flags       :: [Flag],
   wind        :: Wind,
-  visibility  :: Visibility,
+  visibility  :: [Visibility],
+  runwayvis   :: [(Runway, Visibility)],
   wx          :: [WeatherPhenomenon],
   clouds      :: [Cloud],
   pressure    :: Pressure,
   temperature :: Int,
   dewPoint    :: Int,
-  trend       :: Trend
+  trend       :: Trend,
+  remark      :: Maybe Text   
   }
              | ATIS
              | SPECI
@@ -79,7 +83,13 @@ data Distance = Metres Int | KM Int | SM Int | NM Int
         deriving (Eq, Show)
 
 data Visibility = TenOrMore
-                | Visibility Distance deriving (Eq, Show)
+                | Visibility Distance (Maybe Direction) deriving (Eq, Show)
+                
+data Direction = North | South | East | West | NorthWest | NorthEast | SouthWest | SouthEast
+        deriving (Eq, Show)
+        
+data Runway = Runway Int (Maybe Direction)
+        deriving (Eq, Show)
 
 data Date = Date Int Int Int deriving (Eq, Show)
 
@@ -234,15 +244,22 @@ intensityParser = option Moderate $ choice [
                    "RE" `means` Recent]
 
 visibilityParser :: Parser Visibility
-visibilityParser = choice [tenormore, metres, arb]
+visibilityParser = skipSpace >> choice [tenormore, metres, arb]
   where
     tenormore = string "9999" >> return TenOrMore
-    metres = (\a b c d -> Visibility (visunit $ read [a,b,c,d])) <$> digit <*> digit <*> digit <*> digit
+    metres = (\a b c d dir -> Visibility (visunit $ read [a,b,c,d]) dir) <$> digit <*> digit <*> digit <*> digit <*> directionParser 
     visunit :: Int -> Distance
     visunit n = if n > 5000
         then KM (n `quot` 1000)
         else Metres n
-    arb = (\a b unit -> Visibility (unit $ read [a,b])) <$> digit <*> digit <*> distanceUnitParser
+    arb = (\a b unit -> Visibility (unit $ read [a,b])) <$> digit <*> digit <*> distanceUnitParser <*> directionParser
+    
+directionParser :: Parser (Maybe Direction)
+directionParser = Nothing `option` (Just <$> choice [
+                "NE" `means` NorthEast, "NW" `means` NorthWest,
+                "SE" `means` SouthEast, "SW" `means` SouthWest,
+                "N" `means` North, "S" `means` South,
+                "E" `means` East, "W" `means` West])    
 
 distanceUnitParser :: Parser (Int -> Distance)
 distanceUnitParser = choice ["KM" `means` KM, "SM" `means` SM, "NM" `means` NM]
@@ -291,6 +308,9 @@ flagsParser = many' $ choice ["COR" `means'` COR,
                               "AMD" `means'` AMD,
                               "AUTO" `means'` AUTO]
 
+runwayvisParser :: Parser [(Runway, Visibility)]
+runwayvisParser = return []
+
 metarParser :: Parser Weather
 metarParser = do
   _ <- string "METAR"
@@ -299,16 +319,23 @@ metarParser = do
   reportdate <- skipSpace >> dateParser
   reportwind <- skipSpace >> windParser
   skipSpace
-  reportvis <- TenOrMore `option` visibilityParser
+  reportvis <- [TenOrMore] `option` many1 visibilityParser
+  reportrunwayvis <- runwayvisParser
   reportwx <- many' wxParser
   reportclouds <- skipSpace >> cloudParser
   (reporttemp, reportdewpoint) <- skipSpace >> tdParser
   reportpressure <- skipSpace >> pressureParser
+  skipSpace
+  reportrmk <- maybeRMK
   _ <- choice $ map char ['=', '$']
-  return $ METAR reportdate identifier reportflags reportwind reportvis reportwx reportclouds reportpressure reporttemp reportdewpoint reporttrend
+  return $ METAR reportdate identifier reportflags reportwind reportvis reportrunwayvis reportwx reportclouds reportpressure reporttemp reportdewpoint reporttrend reportrmk
     where
       reporttrend = NOTAVAIL
 
+maybeRMK :: Parser (Maybe Text)
+maybeRMK = Nothing `option` do
+        _ <- string "RMK"
+        Just . pack <$> many1 (satisfy (notInClass "$="))
 
 weatherParser :: Parser Weather
 weatherParser = metarParser
@@ -317,4 +344,5 @@ maybeOneSpace :: Parser ()
 maybeOneSpace = perhaps_ space
 
 parseWeather :: Text -> Either String Weather
-parseWeather = parseOnly weatherParser
+--parseWeather = parseOnly weatherParser
+parseWeather text = unsafePerformIO (parseTest weatherParser text) `seq` parseOnly weatherParser text
