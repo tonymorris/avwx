@@ -21,7 +21,7 @@ data Weather = METAR {
   flags       :: [Flag],
   wind        :: Wind,
   visibility  :: [Visibility],
-  runwayvis   :: [(Runway, [Visibility], VisTrend)],
+  runwayvis   :: [(Runway, [Visibility], Maybe VisTrend)],
   runwaycond  :: [RunwayCondition],
   wx          :: [WeatherPhenomenon],
   clouds      :: [Cloud],
@@ -50,7 +50,7 @@ data Trend = BECMG [Transition]
            deriving (Eq, Show)
 
 data Transition = TransWind Wind | TransVis [Visibility] |
-                  TransRunwayVis [(Runway, [Visibility], VisTrend)]  |
+                  TransRunwayVis [(Runway, [Visibility], Maybe VisTrend)]  |
                   TransWX [WeatherPhenomenon] | TransClouds [Cloud]
         deriving (Eq, Show)
 
@@ -349,16 +349,16 @@ flagsParser = many' $ choice ["COR" `means'` COR,
                               "AMD" `means'` AMD,
                               "AUTO" `means'` AUTO]
 
-runwayvisParser :: Parser (Runway, [Visibility], VisTrend)
+runwayvisParser :: Parser (Runway, [Visibility], Maybe VisTrend)
 runwayvisParser = do
         runway <- runwayDesignationParser
         _ <- char '/'
         vis <- choice ["M0050" `means` [FiftyMetresOrLess],
                        "P2000" `means` [TwoOrMore],
                        parseRwyVis]
-        vistrend <- choice ["D" `means` VisTrendDownward,
+        vistrend <- Nothing `option` (Just <$> choice ["D" `means` VisTrendDownward,
                             "N" `means` VisTrendNoDistinctTendency,
-                            "U" `means` VisTrendUpward]
+                            "U" `means` VisTrendUpward])
         return (runway, vis, vistrend)
         where
                 parseRwyVis :: Parser [Visibility]
