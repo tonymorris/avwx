@@ -16,7 +16,7 @@ data Weather = METAR {
   flags       :: [Flag],
   wind        :: Wind,
   visibility  :: [Visibility],
-  runwayvis   :: [(Runway, Visibility)],
+  runwayvis   :: [(Runway, [Visibility], VisTrend)],
   wx          :: [WeatherPhenomenon],
   clouds      :: [Cloud],
   pressure    :: Pressure,
@@ -44,8 +44,11 @@ data Trend = BECMG [Transition]
            deriving (Eq, Show)
 
 data Transition = TransWind Wind | TransVis [Visibility] |
-                  TransRunwayVis [(Runway, Visibility)]  |
+                  TransRunwayVis [(Runway, [Visibility], VisTrend)]  |
                   TransWX [WeatherPhenomenon] | TransClouds [Cloud]
+        deriving (Eq, Show)
+
+data VisTrend = VisTrendUpward | VisTrendDownward | VisTrendNoDistinctTendency
         deriving (Eq, Show)
 
 data Pressure = QNH Int
@@ -86,9 +89,12 @@ data Distance = Metres Int | KM Int | SM Int | NM Int
         deriving (Eq, Show)
 
 data Visibility = TenOrMore
+                | FiftyMetresOrLess
+                | TwoOrMore
                 | Visibility Distance (Maybe Direction) deriving (Eq, Show)
 
-data Direction = North | South | East | West | NorthWest | NorthEast | SouthWest | SouthEast
+data Direction = North | South | East | West | NorthWest | NorthEast | SouthWest | SouthEast |
+                 RWYLeft  | RWYRight | RWYCenter
         deriving (Eq, Show)
 
 data Runway = Runway Int (Maybe Direction)
@@ -121,7 +127,7 @@ data WindDirection = Variable
 data Unit = Knots Int | Miles Int | KMH Int
         deriving (Eq, Show)
 
-data Cloud = Cloud Cover Vertical CloudType deriving (Eq, Show)
+data Cloud = VVis (Maybe Int) | Cloud Cover Vertical CloudType deriving (Eq, Show)
 
 data CloudType = Cumulonimbus
                | ToweringCumulus
@@ -272,7 +278,7 @@ distanceUnitParser :: Parser (Int -> Distance)
 distanceUnitParser = choice ["KM" `means` KM, "SM" `means` SM, "NM" `means` NM]
 
 cloudParser :: Parser [Cloud]
-cloudParser = choice [nsc, cavok, clr, sepBy1' clds (char ' ')]
+cloudParser = choice [(:[]) <$> vvisParser, nsc, cavok, clr, sepBy1' clds (char ' ')]
     where
       clds = do
         perhaps_ space
@@ -283,6 +289,12 @@ cloudParser = choice [nsc, cavok, clr, sepBy1' clds (char ' ')]
       cavok = skipSpace >> "CAVOK" `means` []
       nsc = skipSpace >> "NSC" `means` []
       clr = skipSpace >> "CLR" `means` []
+
+vvisParser :: Parser Cloud
+vvisParser = do
+        _ <- string "VV"
+        choice ["///" `means` VVis Nothing,
+                (\a b c -> VVis . Just . read $ [a,b,c]) <$> digit <*> digit <*> digit]
 
 cloudIntensityParser :: Parser Cover
 cloudIntensityParser = choice ["FEW" `means` FEW,
@@ -316,8 +328,37 @@ flagsParser = many' $ choice ["COR" `means'` COR,
                               "AMD" `means'` AMD,
                               "AUTO" `means'` AUTO]
 
-runwayvisParser :: Parser [(Runway, Visibility)]
-runwayvisParser = return []
+runwayvisParser :: Parser (Runway, [Visibility], VisTrend)
+runwayvisParser = do
+        runway <- runwayDesignationParser
+        _ <- char '/'
+        vis <- choice ["M0050" `means` [FiftyMetresOrLess],
+                       "P2000" `means` [TwoOrMore],
+                       parseRwyVis]
+        vistrend <- choice ["D" `means` VisTrendDownward,
+                            "N" `means` VisTrendNoDistinctTendency,
+                            "U" `means` VisTrendUpward]
+        return (runway, vis, vistrend)
+        where
+                parseRwyVis :: Parser [Visibility]
+                parseRwyVis = do
+                        worstvis <- Nothing `option` (Just <$> choice [fourDigits, trieDigits] <*. "V")
+                        vis <- Just <$> choice [fourDigits, trieDigits]
+                        return [Visibility (Metres a) Nothing | Just a <- [worstvis, vis]]
+
+fourDigits :: Parser Int
+fourDigits = (\a b c d -> read [a,b,c,d]) <$> digit <*> digit <*> digit <*> digit
+
+trieDigits :: Parser Int
+trieDigits = (\a b c -> read [a,b,c]) <$> digit <*> digit <*> digit
+
+runwayDesignationParser :: Parser Runway
+runwayDesignationParser = do
+        _ <- char 'R'
+        magheading <- (\a b -> read [a,b]) <$> digit <*> digit :: Parser Int
+        dir <- Nothing `option` (Just <$> choice ["L" `means` RWYLeft, "R" `means` RWYRight,
+                                                  "C" `means` RWYCenter])
+        return $ Runway magheading dir
 
 trendParser :: Parser Trend
 trendParser = choice ["NOSIG" `means` NOSIG, changeParser]
@@ -330,8 +371,8 @@ trendParser = choice ["NOSIG" `means` NOSIG, changeParser]
 
 changesParser :: Parser [Trend]
 changesParser = many1 $ skipSpace >> transitionTypeParser
-        where 
-                transitionTypeParser :: Parser Trend 
+        where
+                transitionTypeParser :: Parser Trend
                 transitionTypeParser = choice [
                         "TEMPO" `callsfor` (TEMPO <$> transitionParser),
                         "BECMG" `callsfor` (BECMG <$> transitionParser),
@@ -344,13 +385,13 @@ changesParser = many1 $ skipSpace >> transitionTypeParser
                       [
                        TransClouds    <$> cloudParser,
                        TransWind      <$> windParser,
-                       TransVis       <$> many1 visibilityParser,
+                       TransVis       <$> many1' visibilityParser,
                        TransWX        <$> count 1 wxParser,
-                       TransRunwayVis <$> runwayvisParser
+                       TransRunwayVis <$> sepBy' runwayvisParser (char ' ')
                       ]
-                      
+
 twoDigits :: Parser Int
-twoDigits = (\a b -> read [a,b]) <$> digit <*> digit                      
+twoDigits = (\a b -> read [a,b]) <$> digit <*> digit
 
 metarParser :: Parser Weather
 metarParser = do
@@ -361,7 +402,8 @@ metarParser = do
   reportwind <- skipSpace >> windParser
   skipSpace
   reportvis <- [TenOrMore] `option` many1 visibilityParser
-  reportrunwayvis <- runwayvisParser
+  skipSpace
+  reportrunwayvis <- sepBy' runwayvisParser (char ' ')
   reportwx <- many' wxParser
   reportclouds <- skipSpace >> cloudParser
   (reporttemp, reportdewpoint) <- skipSpace >> tdParser
