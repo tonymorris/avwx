@@ -444,6 +444,7 @@ metarParser = do
   reportflags <- flagsParser
   identifier <- skipSpace >> stationParser
   reportdate <- skipSpace >> dateParser
+  reportflags2 <- flagsParser
   reportwind <- skipSpace >> windParser
   skipSpace
   reportvis <- [TenOrMore] `option` many1 visibilityParser
@@ -458,7 +459,7 @@ metarParser = do
   reportrmk <- maybeRMK
   reporttrend <- NOTAVAIL `option` trendParser
   _ <- choice $ map char ['=', '$']
-  return $ METAR reportdate identifier reportflags reportwind reportvis reportrunwayvis reportrunwaycond reportwx reportclouds reportpressure reporttemp reportdewpoint reporttrend reportrmk
+  return $ METAR reportdate identifier (reportflags ++ reportflags2) reportwind reportvis reportrunwayvis reportrunwaycond reportwx reportclouds reportpressure reporttemp reportdewpoint reporttrend reportrmk
 
 maybeRMK :: Parser (Maybe Text)
 maybeRMK = Nothing `option` do
