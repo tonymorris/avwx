@@ -17,6 +17,7 @@ data Weather = METAR {
   wind        :: Wind,
   visibility  :: [Visibility],
   runwayvis   :: [(Runway, [Visibility], VisTrend)],
+  runwaycond  :: [RunwayCondition],
   wx          :: [WeatherPhenomenon],
   clouds      :: [Cloud],
   pressure    :: Pressure,
@@ -97,9 +98,24 @@ data Direction = North | South | East | West | NorthWest | NorthEast | SouthWest
                  RWYLeft  | RWYRight | RWYCenter
         deriving (Eq, Show)
 
-data Runway = Runway Int (Maybe Direction)
+data Runway = AllRunways | Runway Int (Maybe Direction)
         deriving (Eq, Show)
 
+data RwyCoverType = RCTDry | RCTMoist | RCTWet | RCTRime | RCTDrySnow | RCTWetSnow |
+                    RCTSlush | RCTIce | RCTFZRut | RCTUnknown
+        deriving (Eq, Show, Enum)
+        
+data RunwayCondition = RunwayCondition {
+        rwcondRunway :: Runway,
+        rwcondCover  :: RwyCoverType,
+        rwcondSpread :: Maybe Int,
+        rwcondCoverHeight :: Maybe Int,
+        rwcondBrkCoeff :: RunwayBraking } | RwyClosed | ADClosed
+        deriving (Eq, Show)
+
+data RunwayBraking = BrakingFriction Int | BrakingEffect Int
+        deriving (Eq, Show)
+        
 data Date = Date Int Int Int deriving (Eq, Show)
 
 data Station = ICAO Text deriving (Eq, Show)
@@ -345,6 +361,25 @@ runwayvisParser = do
                         worstvis <- Nothing `option` (Just <$> choice [fourDigits, trieDigits] <*. "V")
                         vis <- Just <$> choice [fourDigits, trieDigits]
                         return [Visibility (Metres a) Nothing | Just a <- [worstvis, vis]]
+                        
+runwayconditionParser :: Parser RunwayCondition
+runwayconditionParser = do
+        runway <- runwayDesignationParser
+        _ <- char '/'
+        choice ["SNOCLO" `means` ADClosed,
+                rwycond runway]
+    where
+        rwycond runway = do
+                cover <- RCTUnknown `option` ((toEnum . read . (:[])) <$> digit)
+                spread <- choice [char '/' >> return Nothing,
+                                  (Just . read . (:[])) <$> digit]
+                spreadheight <- choice [string "//" >> return Nothing,
+                                       Just <$> tuhDigits]
+                rkorbw <- tuhDigits
+                let coff = if rkorbw <= 90
+                        then BrakingFriction rkorbw
+                        else BrakingEffect rkorbw
+                return $ RunwayCondition runway cover spread spreadheight coff
 
 fourDigits :: Parser Int
 fourDigits = (\a b c d -> read [a,b,c,d]) <$> digit <*> digit <*> digit <*> digit
@@ -352,8 +387,13 @@ fourDigits = (\a b c d -> read [a,b,c,d]) <$> digit <*> digit <*> digit <*> digi
 trieDigits :: Parser Int
 trieDigits = (\a b c -> read [a,b,c]) <$> digit <*> digit <*> digit
 
+tuhDigits :: Parser Int
+tuhDigits = (\a b -> read [a,b]) <$> digit <*> digit
+
 runwayDesignationParser :: Parser Runway
-runwayDesignationParser = do
+runwayDesignationParser = choice ["R88" `means` AllRunways, oneRunway]
+  where
+    oneRunway = do
         _ <- char 'R'
         magheading <- (\a b -> read [a,b]) <$> digit <*> digit :: Parser Int
         dir <- Nothing `option` (Just <$> choice ["L" `means` RWYLeft, "R" `means` RWYRight,
@@ -404,6 +444,7 @@ metarParser = do
   reportvis <- [TenOrMore] `option` many1 visibilityParser
   skipSpace
   reportrunwayvis <- sepBy' runwayvisParser (char ' ')
+  reportrunwaycond <- sepBy' runwayconditionParser (char ' ')
   reportwx <- many' wxParser
   reportclouds <- skipSpace >> cloudParser
   (reporttemp, reportdewpoint) <- skipSpace >> tdParser
@@ -412,7 +453,7 @@ metarParser = do
   reportrmk <- maybeRMK
   reporttrend <- NOTAVAIL `option` trendParser
   _ <- choice $ map char ['=', '$']
-  return $ METAR reportdate identifier reportflags reportwind reportvis reportrunwayvis reportwx reportclouds reportpressure reporttemp reportdewpoint reporttrend reportrmk
+  return $ METAR reportdate identifier reportflags reportwind reportvis reportrunwayvis reportrunwaycond reportwx reportclouds reportpressure reporttemp reportdewpoint reporttrend reportrmk
 
 maybeRMK :: Parser (Maybe Text)
 maybeRMK = Nothing `option` do
