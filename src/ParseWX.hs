@@ -16,5 +16,6 @@ main = do
         print . parseWeather . pack $ "METAR EDDV 062020Z 14005KT 2000 1400N R09L/P2000N R09R/P2000N MIFG BR NSC 05/04 Q1028 BECMG 1200 BCFG="
         print . parseWeather . pack $ "METAR EDFE 061720Z 04002KT CAVOK 09/01 Q1028 BECMG +TSRA BR BKN002CB="
         print . parseWeather . pack $ "METAR EDFE 061720Z 04002KT CAVOK 09/01 Q1028 PROB30 BECMG +TSRA BR BKN002CB="
+        print . parseWeather . pack $ "METAR KORD 071051Z 18004KT 7SM CLR M08/M12 A2999 RMK AO2 SLP164 T10831117 $"
         -- interact $ unlines . map (show . parseWeather . pack) . lines
               
