@@ -12,7 +12,8 @@ import           Data.Attoparsec.Text
 import           Data.Maybe
 import           Data.Text            (Text, pack)
 
-import           System.IO.Unsafe
+-- For debugging :-)
+-- import           System.IO.Unsafe
 
 data Weather = METAR {
   date        :: Date,
@@ -471,5 +472,5 @@ maybeOneSpace :: Parser ()
 maybeOneSpace = perhaps_ space
 
 parseWeather :: Text -> Either String Weather
---parseWeather = parseOnly weatherParser
-parseWeather text = unsafePerformIO (parseTest weatherParser text) `seq` parseOnly weatherParser text
+parseWeather = parseOnly weatherParser
+-- parseWeather text = unsafePerformIO (parseTest weatherParser text) `seq` parseOnly weatherParser text
