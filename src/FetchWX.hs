@@ -26,7 +26,7 @@ printMetar icao (Left errmsg)  = putStrLn $ icao ++ "\tNOTAVAIL\t" ++ errmsg
 fetchMetar :: String -> IO (Either String Weather)
 fetchMetar icao = do
   metarString <- simpleHTTP (getRequest url) >>= getResponseBody
-  return . parseWeather . pack $ "METAR " ++ relLine metarString
+  return . parseWeather . pack $ "METAR " ++ relLine metarString ++ "="
   where
         url = "http://weather.noaa.gov/pub/data/observations/metar/stations/" ++ icao ++ ".TXT"
         relLine s = Prelude.lines s !! 1

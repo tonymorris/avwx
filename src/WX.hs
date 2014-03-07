@@ -23,7 +23,7 @@ data Weather = METAR {
   temperature :: Int,
   dewPoint    :: Int,
   trend       :: Trend,
-  remark      :: Maybe Text   
+  remark      :: Maybe Text
   }
              | ATIS
              | SPECI
@@ -36,14 +36,17 @@ data Weather = METAR {
 data Flag = COR | AMD | AUTO
         deriving (Eq, Show)
 
-data Trend = BECMG Changes
-           | TEMPO Changes
+data Trend = BECMG [Transition]
+           | TEMPO [Transition]
            | PROB Int Trend
            | NOSIG
            | NOTAVAIL
            deriving (Eq, Show)
 
-data Changes = Changes deriving (Eq, Show)
+data Transition = TransWind Wind | TransVis [Visibility] |
+                  TransRunwayVis [(Runway, Visibility)]  |
+                  TransWX [WeatherPhenomenon] | TransClouds [Cloud]
+        deriving (Eq, Show)
 
 data Pressure = QNH Int
               | MMHG Int
@@ -84,10 +87,10 @@ data Distance = Metres Int | KM Int | SM Int | NM Int
 
 data Visibility = TenOrMore
                 | Visibility Distance (Maybe Direction) deriving (Eq, Show)
-                
+
 data Direction = North | South | East | West | NorthWest | NorthEast | SouthWest | SouthEast
         deriving (Eq, Show)
-        
+
 data Runway = Runway Int (Maybe Direction)
         deriving (Eq, Show)
 
@@ -190,6 +193,9 @@ perhaps parser = option Nothing $ Just <$> parser
 perhaps_ :: Parser a -> Parser ()
 perhaps_ parser = void $ perhaps parser
 
+callsfor :: Text -> Parser a -> Parser a
+a `callsfor` b = string a >> b
+
 means :: Text -> a -> Parser a
 a `means` b = string a >> return b
 
@@ -247,25 +253,25 @@ visibilityParser :: Parser Visibility
 visibilityParser = skipSpace >> choice [tenormore, metres, arb]
   where
     tenormore = string "9999" >> return TenOrMore
-    metres = (\a b c d dir -> Visibility (visunit $ read [a,b,c,d]) dir) <$> digit <*> digit <*> digit <*> digit <*> directionParser 
+    metres = (\a b c d dir -> Visibility (visunit $ read [a,b,c,d]) dir) <$> digit <*> digit <*> digit <*> digit <*> directionParser
     visunit :: Int -> Distance
     visunit n = if n > 5000
         then KM (n `quot` 1000)
         else Metres n
     arb = (\a b unit -> Visibility (unit $ read [a,b])) <$> digit <*> digit <*> distanceUnitParser <*> directionParser
-    
+
 directionParser :: Parser (Maybe Direction)
 directionParser = Nothing `option` (Just <$> choice [
                 "NE" `means` NorthEast, "NW" `means` NorthWest,
                 "SE" `means` SouthEast, "SW" `means` SouthWest,
                 "N" `means` North, "S" `means` South,
-                "E" `means` East, "W" `means` West])    
+                "E" `means` East, "W" `means` West])
 
 distanceUnitParser :: Parser (Int -> Distance)
 distanceUnitParser = choice ["KM" `means` KM, "SM" `means` SM, "NM" `means` NM]
 
 cloudParser :: Parser [Cloud]
-cloudParser = choice [nsc, cavok, many' clds]
+cloudParser = choice [nsc, cavok, sepBy1' clds (char ' ')]
     where
       clds = do
         perhaps_ space
@@ -311,6 +317,35 @@ flagsParser = many' $ choice ["COR" `means'` COR,
 runwayvisParser :: Parser [(Runway, Visibility)]
 runwayvisParser = return []
 
+trendParser :: Parser Trend
+trendParser = choice ["NOSIG" `means` NOSIG, changeParser]
+        where
+                changeParser :: Parser Trend
+                changeParser = do
+                        changes <- changesParser :: Parser [Trend]
+                        when (length changes /= 1) $ fail "A METAR contains exactly one transition"
+                        return $ head changes
+
+changesParser :: Parser [Trend]
+changesParser = many1 $ skipSpace >> transitionTypeParser
+        where 
+                transitionTypeParser :: Parser Trend 
+                transitionTypeParser = choice [
+                        "TEMPO" `callsfor` (TEMPO <$> transitionParser),
+                        "BECMG" `callsfor` (BECMG <$> transitionParser)]
+                transitionParser :: Parser [Transition]
+                transitionParser = sepBy1' oneTransition (char ' ')
+                oneTransition = do
+                    skipSpace
+                    choice . map try $
+                      [
+                       TransClouds    <$> cloudParser,
+                       TransWind      <$> windParser,
+                       TransVis       <$> many1 visibilityParser,
+                       TransWX        <$> count 1 wxParser,
+                       TransRunwayVis <$> runwayvisParser
+                      ]
+
 metarParser :: Parser Weather
 metarParser = do
   _ <- string "METAR"
@@ -327,10 +362,9 @@ metarParser = do
   reportpressure <- skipSpace >> pressureParser
   skipSpace
   reportrmk <- maybeRMK
+  reporttrend <- NOTAVAIL `option` trendParser
   _ <- choice $ map char ['=', '$']
   return $ METAR reportdate identifier reportflags reportwind reportvis reportrunwayvis reportwx reportclouds reportpressure reporttemp reportdewpoint reporttrend reportrmk
-    where
-      reporttrend = NOTAVAIL
 
 maybeRMK :: Parser (Maybe Text)
 maybeRMK = Nothing `option` do
