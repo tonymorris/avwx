@@ -332,7 +332,8 @@ changesParser = many1 $ skipSpace >> transitionTypeParser
                 transitionTypeParser :: Parser Trend 
                 transitionTypeParser = choice [
                         "TEMPO" `callsfor` (TEMPO <$> transitionParser),
-                        "BECMG" `callsfor` (BECMG <$> transitionParser)]
+                        "BECMG" `callsfor` (BECMG <$> transitionParser),
+                        "PROB" `callsfor`  (PROB  <$> twoDigits <*> (head <$> changesParser))]
                 transitionParser :: Parser [Transition]
                 transitionParser = sepBy1' oneTransition (char ' ')
                 oneTransition = do
@@ -345,6 +346,9 @@ changesParser = many1 $ skipSpace >> transitionTypeParser
                        TransWX        <$> count 1 wxParser,
                        TransRunwayVis <$> runwayvisParser
                       ]
+                      
+twoDigits :: Parser Int
+twoDigits = (\a b -> read [a,b]) <$> digit <*> digit                      
 
 metarParser :: Parser Weather
 metarParser = do
