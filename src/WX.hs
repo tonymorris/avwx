@@ -250,7 +250,7 @@ intensityParser = option Moderate $ choice [
                    "RE" `means` Recent]
 
 visibilityParser :: Parser Visibility
-visibilityParser = skipSpace >> choice [tenormore, metres, arb]
+visibilityParser = skipSpace >> choice [tenormore, metres, arb, arb1]
   where
     tenormore = string "9999" >> return TenOrMore
     metres = (\a b c d dir -> Visibility (visunit $ read [a,b,c,d]) dir) <$> digit <*> digit <*> digit <*> digit <*> directionParser
@@ -258,7 +258,8 @@ visibilityParser = skipSpace >> choice [tenormore, metres, arb]
     visunit n = if n > 5000
         then KM (n `quot` 1000)
         else Metres n
-    arb = (\a b unit -> Visibility (unit $ read [a,b])) <$> digit <*> digit <*> distanceUnitParser <*> directionParser
+    arb  = (\a b unit -> Visibility (unit $ read [a,b])) <$> digit <*> digit <*> distanceUnitParser <*> directionParser
+    arb1 = (\a unit -> Visibility (unit $ read ['0', a])) <$> digit <*> distanceUnitParser <*> directionParser
 
 directionParser :: Parser (Maybe Direction)
 directionParser = Nothing `option` (Just <$> choice [
