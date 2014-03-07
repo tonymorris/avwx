@@ -272,7 +272,7 @@ distanceUnitParser :: Parser (Int -> Distance)
 distanceUnitParser = choice ["KM" `means` KM, "SM" `means` SM, "NM" `means` NM]
 
 cloudParser :: Parser [Cloud]
-cloudParser = choice [nsc, cavok, sepBy1' clds (char ' ')]
+cloudParser = choice [nsc, cavok, clr, sepBy1' clds (char ' ')]
     where
       clds = do
         perhaps_ space
@@ -282,6 +282,7 @@ cloudParser = choice [nsc, cavok, sepBy1' clds (char ' ')]
         return $ Cloud intsy height cloudType
       cavok = skipSpace >> "CAVOK" `means` []
       nsc = skipSpace >> "NSC" `means` []
+      clr = skipSpace >> "CLR" `means` []
 
 cloudIntensityParser :: Parser Cover
 cloudIntensityParser = choice ["FEW" `means` FEW,
