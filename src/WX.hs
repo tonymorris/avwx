@@ -1,6 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module WX where
+module WX (
+  parseWeather, weatherParser,
+
+  Weather
+  ) where
 
 import           Control.Applicative
 import           Control.Monad
