@@ -10,7 +10,8 @@ Use at your own risk.
 Comments and contributions are welcome.
 
 What works:
-  * WX:     Weather parser. Currently only parses METARs, excluding TRENDs.
+  * WX:     Weather parser. Currently only parses METARs, including TRENDs.
+            TBD: RMK (Country/region specific remarks), color codes, nonstandard ordering
 
 Command line usage
 ==================
