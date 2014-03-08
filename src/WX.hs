@@ -353,9 +353,7 @@ runwayvisParser :: Parser (Runway, [Visibility], Maybe VisTrend)
 runwayvisParser = do
         runway <- runwayDesignationParser
         _ <- char '/'
-        vis <- choice ["M0050" `means` [FiftyMetresOrLess],
-                       "P2000" `means` [TwoOrMore],
-                       parseRwyVis]
+        vis <- parseRwyVis
         vistrend <- Nothing `option` (Just <$> choice ["D" `means` VisTrendDownward,
                             "N" `means` VisTrendNoDistinctTendency,
                             "U" `means` VisTrendUpward])
@@ -363,9 +361,14 @@ runwayvisParser = do
         where
                 parseRwyVis :: Parser [Visibility]
                 parseRwyVis = do
-                        worstvis <- Nothing `option` (Just <$> choice [fourDigits, trieDigits] <*. "V")
-                        vis <- Just <$> choice [fourDigits, trieDigits]
-                        return [Visibility (Metres a) Nothing | Just a <- [worstvis, vis]]
+                        worstvis <- Nothing `option` (Just <$> (choice visspec) <*. "V")
+                        vis <- Just <$> choice visspec
+                        return [a | Just a <- [worstvis, vis]]
+                        
+                visspec = ["M0050" `means` FiftyMetresOrLess,
+                           "P2000" `means` TwoOrMore,
+                           fourDigits >>= \a -> return $ Visibility (Metres a) Nothing, 
+                           trieDigits >>= \a -> return $ Visibility (Metres a) Nothing]
                         
 runwayconditionParser :: Parser RunwayCondition
 runwayconditionParser = do
