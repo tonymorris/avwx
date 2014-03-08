@@ -361,9 +361,9 @@ runwayvisParser = do
         where
                 parseRwyVis :: Parser [Visibility]
                 parseRwyVis = do
-                        worstvis <- Nothing `option` (Just <$> (choice visspec) <*. "V")
+                        worstvis <- Nothing `option` (Just <$> choice visspec <*. "V")
                         vis <- Just <$> choice visspec
-                        return [a | Just a <- [worstvis, vis]]
+                        return $ catMaybes [worstvis, vis]
                         
                 visspec = ["M0050" `means` FiftyMetresOrLess,
                            "P2000" `means` TwoOrMore,
@@ -461,7 +461,7 @@ metarParser = do
   skipSpace
   reportrmk <- maybeRMK
   reporttrend <- NOTAVAIL `option` trendParser
-  _ <- choice $ map char ['=', '$']
+  _ <- choice $ map char "=$"
   return $ METAR reportdate identifier (reportflags ++ reportflags2) reportwind reportvis reportrunwayvis reportrunwaycond reportwx reportclouds reportpressure reporttemp reportdewpoint reporttrend reportrmk
 
 maybeRMK :: Parser (Maybe Text)
