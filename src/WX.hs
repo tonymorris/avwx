@@ -452,8 +452,8 @@ metarParser = do
   skipSpace
   reportvis <- [TenOrMore] `option` many1 visibilityParser
   skipSpace
-  reportrunwayvis <- sepBy' runwayvisParser (char ' ')
   reportrunwaycond <- sepBy' runwayconditionParser (char ' ')
+  reportrunwayvis <- sepBy' runwayvisParser (char ' ')
   reportwx <- many' wxParser
   reportclouds <- skipSpace >> cloudParser
   (reporttemp, reportdewpoint) <- skipSpace >> tdParser
