@@ -47,11 +47,15 @@ main = withSocketsDo $ do
       hClose h
   
 reUpdateat :: Regex
-reUpdateat = mkRegex "([0-5][0-9])+,? *"
+reUpdateat = mkRegex "([0-5][0-9])"
 parse :: String -> [Int]
-parse updateat = case matchRegexAll reUpdateat updateat of
-  Just (_, _, _, vals) -> read <$> vals
-  Nothing -> []
+parse str = concat $ parseone <$> splitRegex (mkRegex ", *") str
+  where
+    parseone :: String -> [Int]
+    parseone s =
+      case matchRegexAll reUpdateat s of
+        Just (_, _, _, vals) -> read <$> vals
+        Nothing -> []
   
 formatTimeX :: FormatTime t => t -> Int
 formatTimeX = read . formatTime defaultTimeLocale "%M"
@@ -59,7 +63,7 @@ formatTimeX = read . formatTime defaultTimeLocale "%M"
 manageupdates :: IO () -> [Int] -> IO ()
 manageupdates fun whentoupdate = sequence_ . repeat $ do
   ct <- formatTimeX <$> getCurrentTime
-  putStrLn $ "Current minute: " ++ show ct
+  putStrLn $ "Current minute: " ++ show ct ++ "; update at " ++ show whentoupdate
   when ((== ct) `any` whentoupdate) $ do
     putStrLn "Updating now!"
     fun
