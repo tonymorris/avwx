@@ -13,7 +13,14 @@ import System.IO
 import Text.Regex
 
 main = withSocketsDo $ do
-  (wxstation:s_updateat) <- getArgs
+  args <- getArgs
+  when (length args < 2) $ do
+    putStrLn "Usage: ./WXCache ICAO 27,57"
+    putStrLn "    Where ICAO is the identifier of the WX station"
+    putStrLn "    and 27,57 says to update each 27th and 57th minute."
+    putStrLn "Use 'nc 127.0.0.1 13577' to get the current WX."
+    error "usage"
+  let (wxstation:s_updateat) = args
   let updateat = parse $ unwords s_updateat
   curwx <- atomically $ newTVar ""
   updatewx wxstation curwx
@@ -25,7 +32,7 @@ main = withSocketsDo $ do
   putStrLn "Update thread started."
   
   sock <- listenOn $ PortNumber 13577
-  putStrLn $ "Listening on " ++ show sock
+  putStrLn $ "Listening on port 13577."
   sequence_ . repeat $ do
     (h,_,_) <- accept sock
     forkIO $ do
