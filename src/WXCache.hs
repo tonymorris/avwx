@@ -3,6 +3,7 @@ import Control.Monad
 import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.STM
+import Control.Exception
 import Data.Time.Clock
 import Data.Time.Format
 import System.Locale
@@ -83,7 +84,10 @@ updatewx :: String -> TVar String -> IO ()
 updatewx wxicao tv =
   case matchwx wxicao of
     Just icao -> do
-      wx <- simpleHTTP (getRequest $ "http://weather.noaa.gov/pub/data/observations/metar/stations/" ++ icao ++ ".TXT") >>= getResponseBody
+      wx <- (simpleHTTP (getRequest $ "http://weather.noaa.gov/pub/data/observations/metar/stations/" ++ icao ++ ".TXT") >>= getResponseBody) `Control.Exception.catch` saynil icao
       let wxline = last . lines $ wx
       atomically $ writeTVar tv wxline
     Nothing -> atomically $ writeTVar tv "Illegal ICAO identifier"
+  where
+    saynil :: String -> IOException -> IO String
+    saynil icao _ = return $ icao ++ " NIL"
