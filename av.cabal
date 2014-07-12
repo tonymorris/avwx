@@ -12,18 +12,18 @@ executable fetchwx
   main-is:         FetchWX.hs
   build-depends:   
                    base >= 4,
-                   HTTP >=4000.2.8 && <4000.3,
-                   text >=0.11.3 && <0.12,
-                   attoparsec >=0.10.4 && <0.11
+                   HTTP >=4000.2.8,
+                   text >=0.10,
+                   attoparsec >=0.10.4
   ghc-options:     -Wall -rtsopts
   other-modules:   WX
 
 executable parsewx
   build-depends:   
                    base >= 4,
-                   HTTP >=4000.2.8 && <4000.3,
-                   text >=0.11.3 && <0.12,
-                   attoparsec >=0.10.4 && <0.11
+                   HTTP >=4000.2.8,
+                   text >=0.10.3,
+                   attoparsec >=0.10.4
   hs-source-dirs:  src
   ghc-options:     -Wall -rtsopts
   main-is:         ParseWX.hs
