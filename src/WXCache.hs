@@ -29,23 +29,30 @@ main = withSocketsDo $ do
     error "usage"
   let (wxstation:s_updateat) = args
   let updateat = parse $ unwords s_updateat
-  curwx <- atomically $ newTVar ""
+  curwx <- atomically . newTVar . Right $ wxstation ++ " NIL" :: IO (TVar (Either String String))
   updatewx wxstation curwx
   
-  cwx <- atomically $ readTVar curwx
+  cwx <- getwx curwx
   putStrLn $ "Cur WX: " ++ cwx
   
-  _ <- forkIO $ manageupdates (updatewx wxstation curwx) updateat
+  _ <- forkIO $ manageupdates curwx (updatewx wxstation curwx) updateat
   putStrLn "Update thread started."
   
   putStrLn "Listening on port 13577."
   sequence_ . repeat $ do
     (h,_,_) <- accept sock
     forkIO $ do
-      cwx1 <- atomically $ readTVar curwx
+      cwx1 <- getwx curwx
       hPutStrLn h cwx1
       hFlush h
       hClose h
+      
+getwx :: TVar (Either String String) -> IO String
+getwx wxvar = do
+  wx <- atomically $ readTVar wxvar
+  case wx of
+    Left  s -> return s
+    Right s -> return s
   
 reUpdateat :: Regex
 reUpdateat = mkRegex "([0-5][0-9])"
@@ -61,15 +68,21 @@ parse str = concat $ parseone <$> splitRegex (mkRegex ", *") str
 formatTimeX :: FormatTime t => t -> Int
 formatTimeX = read . formatTime defaultTimeLocale "%M"
   
-manageupdates :: IO () -> [Int] -> IO ()
-manageupdates fun whentoupdate = sequence_ . repeat $ do
+manageupdates :: TVar (Either String String) -> IO () -> [Int] -> IO ()
+manageupdates wxvar fun whentoupdate = sequence_ . repeat $ do
   ct <- formatTimeX <$> getCurrentTime
-  putStrLn $ "Current minute: " ++ show ct ++ "; update at " ++ show whentoupdate
-  when ((== ct) `any` whentoupdate) $ do
+  -- putStrLn $ "Current minute: " ++ show ct ++ "; update at " ++ show whentoupdate
+  lastwx <- atomically $ readTVar wxvar
+  let override = case lastwx of
+        Right _ -> True
+        Left _  -> False
+  -- when override $ putStrLn "Override in effect"
+  when (((== ct) `any` whentoupdate) || override) $ do
     putStrLn "Updating now!"
     fun
-  threadDelay 60000000
-
+    threadDelay 60000000
+  threadDelay 1000000
+  
 reValidicao :: Regex
 reValidicao = mkRegex "^([A-Z][A-Z][A-Z][A-Z])$"
 
@@ -80,14 +93,18 @@ matchwx wx = case res of
   Nothing -> Nothing
   where res = matchRegex reValidicao wx
   
-updatewx :: String -> TVar String -> IO ()
+updatewx :: String -> TVar (Either String String) -> IO ()
 updatewx wxicao tv =
   case matchwx wxicao of
     Just icao -> do
-      wx <- (simpleHTTP (getRequest $ "http://weather.noaa.gov/pub/data/observations/metar/stations/" ++ icao ++ ".TXT") >>= getResponseBody) `Control.Exception.catch` saynil icao
-      let wxline = last . lines $ wx
-      atomically $ writeTVar tv wxline
-    Nothing -> atomically $ writeTVar tv "Illegal ICAO identifier"
+      wx <- (Left <$> fetchandformat icao) `Control.Exception.catch` saynil icao
+      atomically $ writeTVar tv wx
+    Nothing -> atomically $ writeTVar tv (Right "Illegal ICAO identifier")
   where
-    saynil :: String -> IOException -> IO String
-    saynil icao _ = return $ icao ++ " NIL"
+    saynil :: String -> IOException -> IO (Either String String)
+    saynil icao _ = return . Right $ icao ++ " NIL"
+
+    fetchandformat :: String -> IO String
+    fetchandformat icao = do
+      (last . lines) <$> (simpleHTTP (getRequest $ "http://weather.noaa.gov/pub/data/observations/metar/stations/" ++ icao ++ ".TXT") >>= getResponseBody)
+      
