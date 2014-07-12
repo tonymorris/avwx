@@ -13,6 +13,11 @@ import System.IO
 import Text.Regex
 
 main = withSocketsDo $ do
+  -- Do this at the very beginning
+  -- so we can easily bail out if the socket
+  -- is already in use.
+  sock <- listenOn $ PortNumber 13577
+  
   args <- getArgs
   when (length args < 2) $ do
     putStrLn "Usage: ./WXCache ICAO 27,57"
@@ -31,7 +36,6 @@ main = withSocketsDo $ do
   forkIO $ manageupdates (updatewx wxstation curwx) updateat
   putStrLn "Update thread started."
   
-  sock <- listenOn $ PortNumber 13577
   putStrLn $ "Listening on port 13577."
   sequence_ . repeat $ do
     (h,_,_) <- accept sock
