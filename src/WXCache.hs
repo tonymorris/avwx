@@ -41,7 +41,7 @@ main = withSocketsDo $ do
     (h,_,_) <- accept sock
     forkIO $ do
       cwx <- atomically $ readTVar curwx
-      hPutStr h cwx
+      hPutStrLn h cwx
       hFlush h
       hClose h
   
