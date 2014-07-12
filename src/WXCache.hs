@@ -12,6 +12,7 @@ import System.Environment
 import System.IO
 import Text.Regex
 
+main :: IO ()
 main = withSocketsDo $ do
   -- Do this at the very beginning
   -- so we can easily bail out if the socket
@@ -33,22 +34,22 @@ main = withSocketsDo $ do
   cwx <- atomically $ readTVar curwx
   putStrLn $ "Cur WX: " ++ cwx
   
-  forkIO $ manageupdates (updatewx wxstation curwx) updateat
+  _ <- forkIO $ manageupdates (updatewx wxstation curwx) updateat
   putStrLn "Update thread started."
   
-  putStrLn $ "Listening on port 13577."
+  putStrLn "Listening on port 13577."
   sequence_ . repeat $ do
     (h,_,_) <- accept sock
     forkIO $ do
-      cwx <- atomically $ readTVar curwx
-      hPutStrLn h cwx
+      cwx1 <- atomically $ readTVar curwx
+      hPutStrLn h cwx1
       hFlush h
       hClose h
   
-re_updateat :: Regex
-re_updateat = mkRegex "([0-5][0-9])+,? *"
+reUpdateat :: Regex
+reUpdateat = mkRegex "([0-5][0-9])+,? *"
 parse :: String -> [Int]
-parse updateat = case matchRegexAll re_updateat updateat of
+parse updateat = case matchRegexAll reUpdateat updateat of
   Just (_, _, _, vals) -> read <$> vals
   Nothing -> []
   
@@ -58,24 +59,24 @@ formatTimeX = read . formatTime defaultTimeLocale "%M"
 manageupdates :: IO () -> [Int] -> IO ()
 manageupdates fun whentoupdate = sequence_ . repeat $ do
   ct <- formatTimeX <$> getCurrentTime
-  putStrLn $ show ct
+  putStrLn $ "Current minute: " ++ show ct
   when ((== ct) `any` whentoupdate) $ do
     putStrLn "Updating now!"
     fun
   threadDelay 60000000
 
-re_validicao :: Regex
-re_validicao = mkRegex "^([A-Z][A-Z][A-Z][A-Z])$"
+reValidicao :: Regex
+reValidicao = mkRegex "^([A-Z][A-Z][A-Z][A-Z])$"
 
 matchwx :: String -> Maybe String
 matchwx wx = case res of
   Just [] -> Nothing
-  Just s -> Just (s !! 0)
+  Just s -> Just (head s)
   Nothing -> Nothing
-  where res = matchRegex re_validicao wx
+  where res = matchRegex reValidicao wx
   
 updatewx :: String -> TVar String -> IO ()
-updatewx wxicao tv = do
+updatewx wxicao tv =
   case matchwx wxicao of
     Just icao -> do
       wx <- simpleHTTP (getRequest $ "http://weather.noaa.gov/pub/data/observations/metar/stations/" ++ icao ++ ".TXT") >>= getResponseBody
