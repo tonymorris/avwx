@@ -66,7 +66,7 @@ parse str = concat $ parseone <$> splitRegex (mkRegex ", *") str
         Nothing -> []
   
 formatTimeX :: FormatTime t => t -> Int
-formatTimeX = read . formatTime defaultTimeLocale "%M"
+formatTimeX = read . formatTime Data.Time.Format.defaultTimeLocale "%M"
   
 manageupdates :: TVar (Either String String) -> IO () -> [Int] -> IO ()
 manageupdates wxvar fun whentoupdate = sequence_ . repeat $ do
