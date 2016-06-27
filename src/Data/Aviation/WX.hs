@@ -4,6 +4,18 @@ module Data.Aviation.WX
     ( parseWeather
     , weatherParser
     , Weather(..)
+    , Date(..)
+    , Station(..)
+    , Flag(..)
+    , Wind(..)
+    , Visibility(..)
+    , Runway(..)
+    , VisTrend(..)
+    , RunwayCondition(..)
+    , WeatherPhenomenon(..)
+    , Cloud(..)
+    , Pressure(..)
+    , Trend(..)
     ) where
 
 import Control.Applicative
@@ -12,8 +24,10 @@ import Data.Attoparsec.Text
 import Data.Maybe
 import Data.Text (Text, pack)
 
+-- Aviation weather, currently only METARs are supported.
 data Weather
-    = METAR
+    = -- | A METeorological Aerodrome Report
+      METAR
     { date        :: Date
     , station     :: Station
     , flags       :: [Flag]
@@ -28,16 +42,31 @@ data Weather
     , dewPoint    :: Int
     , trend       :: Trend
     , remark      :: Maybe Text }
-    | ATIS
-    | SPECI
-    | TAF
-    | AIRMET
-    | SIGMET
-    | GAMET
+    | -- | An automatic terminal information service report
+      ATIS
+    | -- | A non-scheduled METAR
+      SPECI
+    | -- | A terminal aerodrome forecast
+      TAF
+    | -- | An aviation wx hazard message of moderate severity
+      AIRMET
+    | -- | A significant meteorological information message
+      SIGMET
+    | -- | A general aviation forecase message
+      GAMET
     deriving (Eq, Show)
 
+-- | A flag describing an aviation meteorological report
 data Flag
-    = COR | AMD | AUTO
+    = -- | A message has been corrected after the beginning of
+      -- its original validity period
+      COR
+    | -- | A message has been corrected prior to its
+      -- original validity period
+      AMD
+    | -- | A message has been generated fully automatic
+      -- without a plausibility check by a human
+      AUTO
     deriving (Eq, Show)
 
 data Trend
@@ -296,9 +325,9 @@ wxParser = do
     prc <- perhaps precipitationParser
     obfs <- perhaps obfuscationParser
     othr <- perhaps otherParser
-    when ((== 0) . Prelude.length . Prelude.filter not $
+    when ( (== 0) . Prelude.length . Prelude.filter not $
         [ isNothing dsc, isNothing prc
-        , isNothing obfs, isNothing othr]) $ fail ""
+        , isNothing obfs, isNothing othr ] ) $ fail ""
     return $ Phenomenon intsy dsc prc obfs othr
 
 perhaps :: Parser a -> Parser (Maybe a)
