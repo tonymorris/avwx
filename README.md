@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/hce/avutils.svg?branch=master)](https://travis-ci.org/hce/avutils)
+
 avwx
 ====
 
