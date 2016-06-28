@@ -20,13 +20,13 @@ loxt        = "METAR LOXT 281350Z 25007KT 220V290 50KM FEW040CU SCT120AC BKN300C
 main :: IO ()
 main = do
     let Right frankfurt' = parseWeather frankfurt
-    unless (temperature frankfurt' == 42) $ error "Temperature Frankfurt should be 42 degrees"
-    unless (dewPoint frankfurt' == 23) $ error "Dew point Frankfurt should be 23 degrees"
+    unless (temperature frankfurt' == Just 42) $ error "Temperature Frankfurt should be 42 degrees"
+    unless (dewPoint frankfurt' == Just 23) $ error "Dew point Frankfurt should be 23 degrees"
 
     let Right juliana' = parseWeather juliana
-    unless (temperature juliana' == 29) $ error "It's 29 degrees in St. Maarten!"
-    unless (dewPoint juliana' == 24) $ error "What's with the dew point in St. Maarten?"
+    unless (temperature juliana' == Just 29) $ error "It's 29 degrees in St. Maarten!"
+    unless (dewPoint juliana' == Just 24) $ error "What's with the dew point in St. Maarten?"
 
     let Right loxt' = parseWeather loxt
-    unless (temperature loxt' == 27) $ error "Temperature LOXT should be 27 degrees centigrade!"
-    unless (dewPoint loxt' == 12) $ error "Dew point LOXT should be 12 degrees centigrade!"
+    unless (temperature loxt' == Just 27) $ error "Temperature LOXT should be 27 degrees centigrade!"
+    unless (dewPoint loxt' == Just 12) $ error "Dew point LOXT should be 12 degrees centigrade!"

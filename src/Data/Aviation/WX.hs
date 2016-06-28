@@ -58,7 +58,7 @@ data Weather
     , -- | A remark about the reported observation.
       flags       :: [Flag]
     , -- | The observed wind.
-      wind        :: Wind
+      wind        :: Maybe Wind
     , -- | The observed visibility.
       visibility  :: [Visibility]
     , -- | The observed visibility for specific runways,
@@ -72,11 +72,11 @@ data Weather
     , -- | Observed cloud layers
       clouds      :: [Cloud]
     , -- | Measured pressure
-      pressure    :: Pressure
+      pressure    :: Maybe Pressure
     , -- | Measured pressure
-      temperature :: Int
+      temperature :: Maybe Int
     , -- | Determined dew point
-      dewPoint    :: Int
+      dewPoint    :: Maybe Int
     , -- | Expected changes within the next two hours
       trend       :: Trend
     , -- | RMK section (Additional parts of a METAR report that are not
@@ -831,20 +831,21 @@ metarParser = do
     identifier <- skipSpace >> stationParser
     reportdate <- skipSpace >> dateParser
     reportflags2 <- flagsParser
-    reportwind <- skipSpace >> windParser
+    reportwind <- Nothing `option` (skipSpace >> Just <$> windParser)
     skipSpace
     reportvis <- [TenOrMore] `option` many1 visibilityParser
     skipSpace
     reportrunwaycond <- sepBy' runwayconditionParser (char ' ')
     reportrunwayvis <- sepBy' runwayvisParser (char ' ')
     reportwx <- many' wxParser
-    reportclouds <- skipSpace >> cloudParser
-    (reporttemp, reportdewpoint) <- skipSpace >> tdParser
-    reportpressure <- skipSpace >> pressureParser
+    reportclouds <- [] `option` (skipSpace >> cloudParser)
+    (reporttemp, reportdewpoint) <- (Nothing, Nothing) `option` (skipSpace >> tdParser >>= \(w,d) -> return (Just w, Just d))
+    reportpressure <- Nothing `option` (skipSpace >> Just <$> pressureParser)
     void $ many' $ skipSpace >> pressureParser -- Sometimes, multiple pressure values are offered
     skipSpace
     reporttrend <- NOTAVAIL `option` trendParser
     reportrmk <- maybeRMK
+    skipSpace
     _ <- choice $ map char "=$"
     return $ METAR reportdate identifier (reportflags ++ reportflags2)
         reportwind reportvis reportrunwayvis reportrunwaycond reportwx
