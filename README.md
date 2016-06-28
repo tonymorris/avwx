@@ -1,23 +1,12 @@
-avutils
-=======
+avwx
+====
 
-Some aviation related utilities.
+Fetch and parse aviation weather reports.
 
-I'm writing these to learn haskell and about aviation.
+Currently, only standard METAR reports are supported, subject to extensive
+testing. RMK sections are not yet supported.
 
-For educational purposes only, *NOT* for flight planning!
-Use at your own risk.
+Important: "For educational purposes only, *not* for flight planning! Use at
+your own risk."
+
 Comments and contributions are welcome.
-
-What works:
-  * WX:     Weather parser. Currently only parses METARs, including TRENDs.
-            TBD: RMK (Country/region specific remarks), color codes, nonstandard ordering
-
-Command line usage
-==================
-
-    ./fetchwx eddf edds edfe
-Fetch and print the weather of Frankfurt, Stuttgart and Egelsbach
-
-    echo "METAR COR EDDM 061650Z 08007KT CAVOK 08/02 Q1027 NOSIG=" | ./parsewx
-To parse one or more wx reports
