@@ -439,6 +439,8 @@ data Vertical
     | -- | A pressure altitude with reference to the
       -- standard QNH of 1013 hectopascals in hundrets of feet.
       FlightLevel Int
+    | -- | Vertical position is not specified.
+      VertNotSpec
     deriving (Eq, Show)
 
 -- | Wind information.
@@ -528,6 +530,8 @@ data Cover
       BKN
     | -- | More than 7 eights are covered.
       OVC
+    | -- | Cover not specified
+      CoverNotSpecified
     deriving (Enum, Eq, Ord, Show)
 
 stationParser :: Parser Station
@@ -675,7 +679,10 @@ cloudParser = choice [(:[]) <$> vvisParser, nsc, cavok, clr, sepBy1' clds (char 
         clds = do
             perhaps_ space
             intsy <- cloudIntensityParser
-            height <- (\a b c -> Height $ (* 100) $ read [a, b, c]) <$> digit <*> digit <*> digit
+            height <- choice
+                [ "///" `means` VertNotSpec
+                , (\a b c -> Height $ (* 100) $ read [a, b, c]) <$> digit <*> digit <*> digit ]
+
             cloudType <- cloudTypeParser
             return $ Cloud intsy height cloudType
         cavok = skipSpace >> "CAVOK" `means` []
@@ -694,7 +701,8 @@ cloudIntensityParser = choice
     [ "FEW" `means` FEW
     , "SCT" `means` SCT
     , "BKN" `means` BKN
-    , "OVC" `means` OVC ]
+    , "OVC" `means` OVC
+    , "///" `means` CoverNotSpecified ]
 
 cloudTypeParser :: Parser CloudType
 cloudTypeParser = option Unclassified $ choice
@@ -706,7 +714,8 @@ cloudTypeParser = option Unclassified $ choice
     , "AS" `means` Altostratus
     , "AC" `means` Altocumulus
     , "CS" `means` Cirrostratus
-    , "CI" `means` Cirrus ]
+    , "CI" `means` Cirrus
+    , "///" `means` Unclassified]
 
 perhapsMinus :: Parser String
 perhapsMinus = "" `option` (char 'M' >> return "-")
