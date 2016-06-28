@@ -1,5 +1,5 @@
 name:                avwx
-version:             0.1.0.0
+version:             0.1.0.1
 synopsis:            Parse METAR weather reports
 description:         Parse METAR weather reports
 homepage:            https://github.com/hce/avwx
@@ -45,4 +45,4 @@ test-suite avwx-test
 
 source-repository head
   type:     git
-  location: https://github.com/VirtualForgeGmbH/hascar.git
+  location: https://github.com/hce/avwx.git
