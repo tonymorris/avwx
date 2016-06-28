@@ -93,7 +93,7 @@ data Weather
       AIRMET
     | -- | A significant meteorological information message
       SIGMET
-    | -- | A general aviation forecase message
+    | -- | A general aviation forecast message
       GAMET
     deriving (Eq, Show)
 
