@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/hce/avutils.svg?branch=master)](https://travis-ci.org/hce/avutils)
+[![Build Status](https://travis-ci.org/hce/avwx.svg?branch=master)](https://travis-ci.org/hce/avwx)
 
 avwx
 ====
