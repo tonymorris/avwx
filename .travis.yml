@@ -7,6 +7,13 @@ sudo: false
 # Choose a lightweight base image; we provide our own build tools.
 language: c
 
+env:
+- ARGS=""
+- ARGS="--resolver lts-5"
+- ARGS="--resolver lts-6"
+- ARGS="--resolver lts"
+- ARGS="--resolver nightly"
+
 addons:
   apt:
     packages:
