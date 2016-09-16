@@ -21,7 +21,7 @@ library
   build-depends:       base >= 4.7 && < 5
                      , attoparsec
                      , HTTP
-                     , text >= 1.2.2.1 && < 1.3
+                     , text
   default-language:    Haskell2010
 
 executable metar
