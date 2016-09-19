@@ -48,5 +48,6 @@ The output will look like this:
       , dewPoint = Just 15
       , trend = NOSIG
       , remark = Nothing
+      , maintenance = False
           }
     ...

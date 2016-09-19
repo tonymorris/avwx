@@ -1,4 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+
 -- |
 -- Module: Data.Aviation.WX
 -- Copyright: (C) 2014-2016, Hans-Christian Esperer
@@ -8,81 +13,142 @@
 -- Portability: portable
 --
 -- Parse aviation weather reports. A qualified import is recommended.
-module Data.Aviation.WX
-    ( parseWeather
-    , weatherParser
-    , Weather(..)
-    , Date(..)
-    , Station(..)
-    , Flag(..)
-    , Wind(..)
-    , Visibility(..)
-    , Runway(..)
-    , VisTrend(..)
-    , RunwayCondition(..)
-    , WeatherPhenomenon(..)
-    , Cloud(..)
-    , Pressure(..)
-    , Trend(..)
-    , WPDesc(..)
-    , WPPrecipitation(..)
-    , WPObfuscation(..)
-    , WPOther(..)
-    , Distance(..)
-    , Direction(..)
-    , RwyCoverType(..)
-    , RunwayBraking(..)
-    , Vertical(..)
-    , WindDirection(..)
-    , Cover(..)
-    , CloudType(..)
-    , WPIntensity(..)
-    , Transition(..)
-    , Unit(..)
-    ) where
+module Data.Aviation.WX(
+  weatherParser
+  , Weather(..)
+  , HasWeather(..)
+  , AsWeather(..)
+  , Date(..)
+  , HasDate(..)
+  , Station(..)
+  , Flag(..)
+  , HasFlag(..)
+  , AsFlag(..)
+  , Wind(..)
+  , HasWind(..)
+  , Visibility(..)
+  , HasVisibility(..)
+  , AsVisibility(..)
+  , Runway(..)
+  , HasRunway(..)
+  , AsRunway(..)
+  , VisTrend(..)
+  , HasVisTrend(..)
+  , AsVisTrend(..)
+  , RunwayCondition(..)
+  , HasRunwayCondition(..)
+  , AsRunwayCondition(..)
+  , WeatherPhenomenon(..)
+  , HasWeatherPhenomenon(..)
+  , Cloud(..)
+  , HasCloud(..)
+  , AsCloud(..)
+  , Pressure(..)
+  , HasPressure(..)
+  , AsPressure(..)
+  , Trend(..)
+  , HasTrend(..)
+  , AsTrend(..)
+  , WPDesc(..)
+  , HasWPDesc(..)
+  , AsWPDesc(..)
+  , WPPrecipitation(..)
+  , HasWPPrecipitation(..)
+  , AsWPPrecipitation(..)
+  , WPObfuscation(..)
+  , HasWPObfuscation(..)
+  , AsWPObfuscation(..)
+  , WPOther(..)
+  , HasWPOther(..)
+  , AsWPOther(..)
+  , Distance(..)
+  , HasDistance(..)
+  , AsDistance(..)
+  , Direction(..)
+  , HasDirection(..)
+  , AsDirection(..)
+  , RwyCoverType(..)
+  , HasRwyCoverType(..)
+  , AsRwyCoverType(..)
+  , RunwayBraking(..)
+  , HasRunwayBraking(..)
+  , AsRunwayBraking(..)
+  , Vertical(..)
+  , HasVertical(..)
+  , AsVertical(..)
+  , WindDirection(..)
+  , HasWindDirection(..)
+  , AsWindDirection(..)
+  , Cover(..)
+  , HasCover(..)
+  , AsCover(..)
+  , CloudType(..)
+  , HasCloudType(..)
+  , AsCloudType(..)
+  , WPIntensity(..)
+  , HasWPIntensity(..)
+  , AsWPIntensity(..)
+  , Transition(..)
+  , HasTransition(..)
+  , AsTransition(..)
+  , Unit(..)
+  , HasUnit(..)
+  , AsUnit(..)
+  ) where
 
-import Control.Applicative
-import Control.Monad
-import Data.Attoparsec.Text
-import Data.Maybe
-import Data.Text (Text, pack)
+import Control.Applicative(Alternative((<|>), some, many), optional)
+import Control.Lens(makeClassy, makeClassyPrisms, makeWrapped)
+import Control.Monad(when, void)
+import Data.Maybe(isNothing, catMaybes)
+import Data.Text(Text, pack)
+import Text.Parser.Char(CharParsing, space, spaces, char, satisfy, text, digit, anyChar)
+import Text.Parser.Combinators(try, option, choice, sepBy, sepBy1, count)
+
+takeChars ::
+  CharParsing f =>
+  Int
+  -> f Text
+takeChars n =
+  pack <$> count n anyChar
 
 -- | Aviation weather, currently only METARs are supported.
 data Weather
     = -- | A METeorological Aerodrome Report
       METAR
     { -- | The observation date.
-      date        :: Date
+      _metardate        :: Date
     , -- | The designation of the observing station.
-      station     :: Station
+      _station     :: Station
     , -- | A remark about the reported observation.
-      flags       :: [Flag]
+      _flags       :: [Flag]
     , -- | The observed wind.
-      wind        :: Maybe Wind
+      _metarwind        :: Maybe Wind
     , -- | The observed visibility.
-      visibility  :: [Visibility]
+      _metarvisibility  :: [Visibility]
     , -- | The observed visibility for specific runways,
       -- usually reported if the runway visibility significantly
       -- differs from the general reported visibility.
-      runwayvis   :: [(Runway, [Visibility], Maybe VisTrend)]
+      _runwayvis   :: [(Runway, [Visibility], Maybe VisTrend)]
     , -- | Surface or close conditions of a specific runway.
-      runwaycond  :: [RunwayCondition]
+      _runwaycond  :: [RunwayCondition]
     , -- | Observed weather phenomena
-      wx          :: [WeatherPhenomenon]
+      _wx          :: [WeatherPhenomenon]
     , -- | Observed cloud layers
-      clouds      :: [Cloud]
+      _clouds      :: [Cloud]
     , -- | Measured pressure
-      pressure    :: Maybe Pressure
+      _metarpressure    :: Maybe Pressure
     , -- | Measured pressure
-      temperature :: Maybe Int
+      _temperature :: Maybe Int
     , -- | Determined dew point
-      dewPoint    :: Maybe Int
+      _dewPoint    :: Maybe Int
     , -- | Expected changes within the next two hours
-      trend       :: Trend
+      _weathertrend       :: Trend
     , -- | RMK section (Additional parts of a METAR report that are not
       -- part of the official METAR message but are commonly used
       -- in various parts of the world; unparsed)
-      remark      :: Maybe Text }
+      _remark      :: Maybe Text
+    , --
+      _maintenance :: Bool }
     | -- | An automatic terminal information service report
       ATIS
     | -- | A non-scheduled METAR
@@ -192,15 +258,15 @@ data Pressure
 data WeatherPhenomenon
     = Phenomenon
     { -- | The intensity of the phenomenon.
-      intensity :: WPIntensity
+      _intensity :: WPIntensity
     , -- | The description of the weather phenomenon.
-      desc      :: Maybe WPDesc
+      _desc      :: Maybe WPDesc
     , -- | The precipitation type of the weather phenomenon.
-      prec      :: Maybe WPPrecipitation
+      _prec      :: Maybe WPPrecipitation
     , -- | The effects of the phenomenon on the visibility
-      obfus     :: Maybe WPObfuscation
+      _obfus     :: Maybe WPObfuscation
     , -- | Other details about the phenomenon.
-      other     :: Maybe WPOther }
+      _other     :: Maybe WPOther }
     deriving (Eq, Show)
 
 -- | The intensity of an observed or expected weather phenomenon.
@@ -316,7 +382,7 @@ data Visibility
     | -- | Two kilometres or more.
       TwoOrMore
     | -- | A specific visibility.
-      Visibility Distance (Maybe Direction)
+      SpecificVisibility Distance (Maybe Direction)
     deriving (Eq, Show)
 
 -- | Directions.
@@ -353,12 +419,12 @@ data Runway
     = -- | All runways.
       AllRunways
     | -- | A specific runway.
-      Runway
+      SpecificRunway
     { -- | The runway's magnetic orientation, divided by ten and rounded.
-      runwayQFU                 :: Int
+      _runwayQFU                 :: Int
     , -- | For multiple runways with the same QFU, a left, right or centre
       -- selector is added.
-      runwayDirection           :: Maybe Direction }
+      _runwayDirection           :: Maybe Direction }
     deriving (Eq, Show)
 
 -- | The runway contamination type.
@@ -388,22 +454,22 @@ data RwyCoverType
 -- | Runway conditions.
 data RunwayCondition
     = -- | Specific runway conditions exist.
-      RunwayCondition
+      SpecificRunwayCondition
     { -- | The runway for which specific conditions
       -- have been observed.
-      rwcondRunway :: Runway
+      _rwcondRunway :: Runway
     , -- | Whether and how the runway is contamindated.
-      rwcondCover  :: RwyCoverType
+      _rwcondCover  :: RwyCoverType
     , -- | The extent of the contamination in percent.
-      rwcondSpread :: Maybe Int
+      _rwcondSpread :: Maybe Int
     , -- | The height of the contamination in millimetres.
-      rwcondCoverHeight :: Maybe Int
+      _rwcondCoverHeight :: Maybe Int
     , -- | The friction coefficient or braking action value.
-      rwcondBrkCoeff :: RunwayBraking }
+      _rwcondBrkCoeff :: RunwayBraking }
     | -- | The runway is closed.
       RwyClosed
     { -- | The runway that is closed.
-      rwclosedRunway :: Runway }
+      _rwclosedRunway :: Runway }
     | -- | The whole aerodrome is closed.
       ADClosed
     deriving (Eq, Show)
@@ -418,11 +484,14 @@ data RunwayBraking
 
 -- | An obersvation date.
 data Date
-    = Date Int Int Int
-    deriving (Eq, Show)
+    = Date {
+      _dayOfMonth :: Int
+    , _hour :: Int
+    , _minute :: Int
+    } deriving (Eq, Show)
 
 -- | An aeronautical weather station designator.
-data Station
+newtype Station
     = -- | The station as identified by its aerodrome's
       -- ICAO code.
       ICAO Text
@@ -447,11 +516,11 @@ data Vertical
 data Wind
     = Wind
     { -- | The direction the wind is blowing from.
-      direction :: WindDirection
+      _winddirection :: WindDirection
     , -- | The wind speed.
-      velocity  :: Unit
+      _velocity  :: Unit
     , -- | The strength of the observed gusts, if any.
-      gusts     :: Maybe Int
+      _gusts     :: Maybe Int
     } deriving (Eq, Show)
 
 -- | The direction the wind is blowing from.
@@ -468,11 +537,11 @@ data WindDirection
       -- range.
       Varying
     { -- | The mean direction the wind is blowing from.
-      mean :: Int
+      _windmean :: Int
     , -- | The minimum direction the wind is blowing from.
-      from :: Int
+      _windfrom :: Int
     , -- | The maximum direction the wind is blowing from.
-      to   :: Int
+      _windto   :: Int
     } deriving (Eq, Show)
      
 
@@ -493,7 +562,7 @@ data Cloud
       -- the ground is covered in clouds.
       VVis (Maybe Int)
     | -- | Clouds were observed.
-      Cloud Cover Vertical CloudType
+      ObservedCloud Cover Vertical CloudType
     deriving (Eq, Show)
 
 -- | The type of cloud.
@@ -534,14 +603,79 @@ data Cover
       CoverNotSpecified
     deriving (Enum, Eq, Ord, Show)
 
-stationParser :: Parser Station
-stationParser = ICAO <$> Data.Attoparsec.Text.take 4
+makeClassy       ''Weather
+makeClassyPrisms ''Weather
+makeClassy       ''Flag
+makeClassyPrisms ''Flag
+makeClassy       ''Trend
+makeClassyPrisms ''Trend
+makeClassy       ''Transition
+makeClassyPrisms ''Transition
+makeClassy       ''VisTrend
+makeClassyPrisms ''VisTrend
+makeClassy       ''Pressure
+makeClassyPrisms ''Pressure
+makeClassy       ''WeatherPhenomenon
+makeClassy       ''WPIntensity
+makeClassyPrisms ''WPIntensity
+makeClassy       ''WPDesc
+makeClassyPrisms ''WPDesc
+makeClassy       ''WPPrecipitation
+makeClassyPrisms ''WPPrecipitation
+makeClassy       ''WPObfuscation
+makeClassyPrisms ''WPObfuscation
+makeClassy       ''WPOther
+makeClassyPrisms ''WPOther
+makeClassy       ''Distance
+makeClassyPrisms ''Distance
+makeClassy       ''Visibility
+makeClassyPrisms ''Visibility
+makeClassy       ''Direction
+makeClassyPrisms ''Direction
+makeClassy       ''Runway
+makeClassyPrisms ''Runway
+makeClassy       ''RwyCoverType
+makeClassyPrisms ''RwyCoverType
+makeClassy       ''RunwayCondition
+makeClassyPrisms ''RunwayCondition
+makeClassy       ''RunwayBraking
+makeClassyPrisms ''RunwayBraking
+makeClassy       ''Date
+makeWrapped      ''Station
+makeClassy       ''Vertical
+makeClassyPrisms ''Vertical
+makeClassy       ''Wind
+makeClassy       ''WindDirection
+makeClassyPrisms ''WindDirection
+makeClassy       ''Unit
+makeClassyPrisms ''Unit
+makeClassy       ''Cloud
+makeClassyPrisms ''Cloud
+makeClassy       ''CloudType
+makeClassyPrisms ''CloudType
+makeClassy       ''Cover
+makeClassyPrisms ''Cover
 
-dateParser :: Parser Date
-dateParser = Date <$> twin <*> twin <*> (twin <* "Z")
+instance HasWPIntensity WeatherPhenomenon where
+  wPIntensity =
+    intensity . wPIntensity
+
+instance HasWindDirection Wind where
+  windDirection =
+    winddirection . windDirection
+
+instance HasUnit Wind where
+  unit = 
+    velocity . unit
+    
+stationParser :: CharParsing f => f Station
+stationParser = ICAO <$> takeChars 4
+
+dateParser :: CharParsing f => f Date
+dateParser = Date <$> twin <*> twin <*> (twin <* text "Z")
     where twin = (\a b -> read [a, b]) <$> digit <*> digit
 
-variableWindParser :: WindDirection -> Parser WindDirection
+variableWindParser :: (Monad f, CharParsing f) => WindDirection -> f WindDirection
 variableWindParser (Degrees meanWind) = try $ do
     dir1 <- (\a b c -> read [a, b, c]) <$> digit <*> digit <*> digit
     _ <- char 'V'
@@ -549,14 +683,14 @@ variableWindParser (Degrees meanWind) = try $ do
     return $ Varying meanWind dir1 dir2
 variableWindParser _ = fail "Erroneous parameters"
 
-windParser :: Parser Wind
+windParser :: (Monad f, CharParsing f) => f Wind
 windParser = do
     dir <- choice [readwinddir, variablewind]
     str <- readwindstr
     gustsies <- option Nothing readgusts
-    unit <- readunit
+    unit' <- readunit
     dir2 <- option dir $ char ' ' >> variableWindParser dir
-    return $ Wind dir2 (unit str) gustsies
+    return $ Wind dir2 (unit' str) gustsies
     where
         variablewind = "VRB" `means` Variable
         readwinddir = (\a b c -> Degrees . read $ [a, b, c]) <$> digit <*> digit <*> digit
@@ -566,15 +700,15 @@ windParser = do
                           , "KM" `means` KMH]
         readgusts = (\_ b c -> Just . read $ [b, c]) <$> char 'G' <*> digit <*> digit
 
-pressureParser :: Parser Pressure
+pressureParser :: CharParsing f => f  Pressure
 pressureParser = choice [qnh, mmhg]
     where
       qnh = (\_ a b c d -> QNH $ read [a, b, c, d]) <$> char 'Q' <*> digit <*> digit <*> digit <*> digit
       mmhg = (\_ a b c d -> Altimeter $ read [a, b, c, d]) <$> char 'A' <*> digit <*> digit <*> digit <*> digit
 
-wxParser :: Parser WeatherPhenomenon
+wxParser :: (Monad f, CharParsing f) => f WeatherPhenomenon
 wxParser = do
-    skipSpace
+    spaces
     intsy <- intensityParser
     dsc <- perhaps descParser
     prc <- perhaps precipitationParser
@@ -585,22 +719,22 @@ wxParser = do
         , isNothing obfs, isNothing othr ] ) $ fail ""
     return $ Phenomenon intsy dsc prc obfs othr
 
-perhaps :: Parser a -> Parser (Maybe a)
+perhaps :: Alternative m => m a -> m (Maybe a)
 perhaps parser = option Nothing $ Just <$> parser
 
-perhaps_ :: Parser a -> Parser ()
+perhaps_ :: Alternative f => f a -> f ()
 perhaps_ parser = void $ perhaps parser
 
-callsfor :: Text -> Parser a -> Parser a
-a `callsfor` b = string a >> b
+callsfor :: (CharParsing m, Monad m) => Text -> m b -> m b
+a `callsfor` b = text a >> b
 
-means :: Text -> a -> Parser a
-a `means` b = string a >> return b
+means :: (CharParsing m, Monad m) => Text -> b -> m b
+a `means` b = text a >> return b
 
-means' :: Text -> a -> Parser a
-a `means'` b = try $ skipSpace >> string a >> skipSpace >> return b
+means' :: (CharParsing m, Monad m) => Text -> a -> m a
+a `means'` b = try $ spaces >> text a >> spaces >> return b
 
-descParser :: Parser WPDesc
+descParser :: (Monad f, CharParsing f) => f WPDesc
 descParser = choice
     [ "MI" `means` Shallow
     , "BC" `means` Patches
@@ -611,7 +745,7 @@ descParser = choice
     , "TS" `means` Thunderstorm
     , "FZ" `means` Freezing ]
 
-precipitationParser :: Parser WPPrecipitation
+precipitationParser :: (Monad f, CharParsing f) => f WPPrecipitation
 precipitationParser = choice
     [ "DZ" `means` Drizzle
     , "RA" `means` Rain
@@ -623,7 +757,7 @@ precipitationParser = choice
     , "GS" `means` SnowPellets
     , "UP" `means` UnknownPrecipitation ]
 
-obfuscationParser :: Parser WPObfuscation
+obfuscationParser :: (Monad f, CharParsing f) => f WPObfuscation
 obfuscationParser = choice
     [ "BR" `means` Mist
     , "FG" `means` Fog
@@ -633,7 +767,7 @@ obfuscationParser = choice
     , "SA" `means` Sand
     , "HZ" `means` Haze ]
 
-otherParser :: Parser WPOther
+otherParser :: (Monad f, CharParsing f) => f WPOther
 otherParser = choice
     [ "PO" `means` DustOrSandwhirls
     , "SQ" `means` Squalls
@@ -641,40 +775,40 @@ otherParser = choice
     , "SS" `means` Sandstorm
     , "DS" `means` Duststorm ]
 
-intensityParser :: Parser WPIntensity
+intensityParser :: (Monad f, CharParsing f) => f WPIntensity
 intensityParser = option Moderate $ choice
     [ char '-' >> return Light
     , char '+' >> return Heavy
     , "VC" `means` Vicinity
     , "RE" `means` Recent ]
 
-visibilityParser :: Parser Visibility
-visibilityParser = skipSpace >> choice [ tenormore, arb, arb1, metres ]
+visibilityParser :: (Monad f, CharParsing f) => f Visibility
+visibilityParser = spaces >> choice [ tenormore, arb, arb1, metres ]
     where
-        tenormore = string "9999" >> return TenOrMore
-        metres = (\a b c d dir -> Visibility (visunit $ read [a,b,c,d]) dir) <$> digit <*> digit <*> digit <*> digit <*> directionParser
+        tenormore = text "9999" >> return TenOrMore
+        metres = (\a b c d dir -> SpecificVisibility (visunit $ read [a,b,c,d]) dir) <$> digit <*> digit <*> digit <*> digit <*> directionParser
         visunit :: Int -> Distance
         visunit n = if n > 5000
             then KM (n `quot` 1000)
             else Metres n
-        arb  = (\a b unit -> Visibility (unit $ read [a,b])) <$> digit <*> digit <*> distanceUnitParser <*> directionParser
-        arb1 = (\a unit -> Visibility (unit $ read ['0', a])) <$> digit <*> distanceUnitParser <*> directionParser
+        arb  = (\a b unit' -> SpecificVisibility (unit' $ read [a,b])) <$> digit <*> digit <*> distanceUnitParser <*> directionParser
+        arb1 = (\a unit' -> SpecificVisibility (unit' $ read ['0', a])) <$> digit <*> distanceUnitParser <*> directionParser
 
-directionParser :: Parser (Maybe Direction)
+directionParser :: (Monad f, CharParsing f) => f (Maybe Direction)
 directionParser = Nothing `option` (Just <$> choice
     [ "NE" `means` NorthEast, "NW" `means` NorthWest
     , "SE" `means` SouthEast, "SW" `means` SouthWest
     , "N" `means` North, "S" `means` South
     , "E" `means` East, "W" `means` West ])
 
-distanceUnitParser :: Parser (Int -> Distance)
+distanceUnitParser :: (Monad f, CharParsing f) => f (Int -> Distance)
 distanceUnitParser = choice
     [ "KM" `means` KM
     , "SM" `means` SM
     , "NM" `means` NM ]
 
-cloudParser :: Parser [Cloud]
-cloudParser = choice [(:[]) <$> vvisParser, nsc, cavok, clr, sepBy1' clds (char ' ')]
+cloudParser :: (Monad f, CharParsing f) => f [Cloud]
+cloudParser = choice [(:[]) <$> vvisParser, nsc, cavok, clr, sepBy1 clds (char ' ')]
     where
         clds = do
             perhaps_ space
@@ -683,20 +817,20 @@ cloudParser = choice [(:[]) <$> vvisParser, nsc, cavok, clr, sepBy1' clds (char 
                 [ "///" `means` VertNotSpec
                 , (\a b c -> Height $ (* 100) $ read [a, b, c]) <$> digit <*> digit <*> digit ]
 
-            cloudType <- cloudTypeParser
-            return $ Cloud intsy height cloudType
-        cavok = skipSpace >> "CAVOK" `means` []
-        nsc = skipSpace >> "NSC" `means` []
-        clr = skipSpace >> "CLR" `means` []
+            cloudType' <- cloudTypeParser
+            return $ ObservedCloud intsy height cloudType'
+        cavok = spaces >> "CAVOK" `means` []
+        nsc = spaces >> "NSC" `means` []
+        clr = spaces >> "CLR" `means` []
 
-vvisParser :: Parser Cloud
+vvisParser :: (Monad f, CharParsing f) => f Cloud
 vvisParser = do
-    _ <- string "VV"
+    _ <- text "VV"
     choice
         [ "///" `means` VVis Nothing
         , (\a b c -> VVis . Just . read $ [a,b,c]) <$> digit <*> digit <*> digit ]
 
-cloudIntensityParser :: Parser Cover
+cloudIntensityParser :: (Monad f, CharParsing f) => f Cover
 cloudIntensityParser = choice
     [ "FEW" `means` FEW
     , "SCT" `means` SCT
@@ -704,7 +838,7 @@ cloudIntensityParser = choice
     , "OVC" `means` OVC
     , "///" `means` CoverNotSpecified ]
 
-cloudTypeParser :: Parser CloudType
+cloudTypeParser :: (Monad f, CharParsing f) => f CloudType
 cloudTypeParser = option Unclassified $ choice
     [ "CB" `means` Cumulonimbus
     , "TCU" `means` ToweringCumulus
@@ -717,162 +851,151 @@ cloudTypeParser = option Unclassified $ choice
     , "CI" `means` Cirrus
     , "///" `means` Unclassified]
 
-perhapsMinus :: Parser String
+perhapsMinus :: (Monad f, CharParsing f) => f String
 perhapsMinus = "" `option` (char 'M' >> return "-")
 
-tdParser :: Parser (Int, Int)
+tdParser :: (Monad f, CharParsing f) => f (Int, Int)
 tdParser = do
     tmpr <- (\pm a b -> read (pm ++ [a, b]) :: Int) <$> perhapsMinus <*> digit <*> digit
     _ <- char '/'
     dewpoint <- (\pm a b -> read (pm ++ [a, b]) :: Int) <$> perhapsMinus <*> digit <*> digit
     return (tmpr, dewpoint)
 
-flagsParser :: Parser [Flag]
-flagsParser = many' $ choice
+flagsParser :: (Monad f, CharParsing f) => f [Flag]
+flagsParser = many $ choice
     [ "COR" `means'` COR
     , "AMD" `means'` AMD
     , "AUTO" `means'` AUTO ]
 
-runwayvisParser :: Parser (Runway, [Visibility], Maybe VisTrend)
+runwayvisParser ::  (Monad f, CharParsing f) => f (Runway, [Visibility], Maybe VisTrend)
 runwayvisParser = do
-    runway <- runwayDesignationParser
+    runway' <- runwayDesignationParser
     _ <- char '/'
     vis <- parseRwyVis
     vistrend <- Nothing `option` (Just <$> choice
         [ "D" `means` VisTrendDownward
         , "N" `means` VisTrendNoDistinctTendency
         , "U" `means` VisTrendUpward ] )
-    return (runway, vis, vistrend)
+    return (runway', vis, vistrend)
     where
-        parseRwyVis :: Parser [Visibility]
         parseRwyVis = do
-            worstvis <- Nothing `option` (Just <$> choice visspec <* "V")
+            worstvis <- Nothing `option` (Just <$> choice visspec <* text "V")
             vis <- Just <$> choice visspec
             return $ catMaybes [worstvis, vis]
                         
         visspec =
             [ "M0050" `means` FiftyMetresOrLess
             , "P2000" `means` TwoOrMore
-            , fourDigits >>= \a -> return $ Visibility (Metres a) Nothing
-            , trieDigits >>= \a -> return $ Visibility (Metres a) Nothing ]
+            , fourDigits >>= \a -> return $ SpecificVisibility (Metres a) Nothing
+            , trieDigits >>= \a -> return $ SpecificVisibility (Metres a) Nothing ]
                         
-runwayconditionParser :: Parser RunwayCondition
+runwayconditionParser ::  (Monad f, CharParsing f) => f RunwayCondition
 runwayconditionParser = do
-    runway <- runwayDesignationParser
+    runway' <- runwayDesignationParser
     _ <- char '/'
     choice
         [ "SNOCLO" `means` ADClosed
-        , rwycond runway ]
+        , rwycond runway' ]
 
     where
-        rwycond runway = do
-            cover <- RCTUnknown `option` ((toEnum . read . (:[])) <$> digit)
+        rwycond runway' = do
+            cover' <- RCTUnknown `option` ((toEnum . read . (:[])) <$> digit)
             spread <- choice
                 [ char '/' >> return Nothing
                 , (Just . read . (:[])) <$> digit ]
             spreadheight <- choice
-                [ string "//" >> return Nothing
+                [ text "//" >> return Nothing
                 , Just <$> tuhDigits ]
             rkorbw <- tuhDigits
             let coff = if rkorbw <= 90
                     then BrakingFriction rkorbw
                     else BrakingEffect rkorbw
-            return $ RunwayCondition runway cover spread spreadheight coff
+            return $ SpecificRunwayCondition runway' cover' spread spreadheight coff
 
-fourDigits :: Parser Int
+fourDigits :: CharParsing f => f Int
 fourDigits = (\a b c d -> read [a,b,c,d]) <$> digit <*> digit <*> digit <*> digit
 
-trieDigits :: Parser Int
+trieDigits :: CharParsing f => f Int
 trieDigits = (\a b c -> read [a,b,c]) <$> digit <*> digit <*> digit
 
-tuhDigits :: Parser Int
+tuhDigits :: CharParsing f => f Int
 tuhDigits = (\a b -> read [a,b]) <$> digit <*> digit
 
-runwayDesignationParser :: Parser Runway
+runwayDesignationParser :: (Monad f, CharParsing f) => f Runway
 runwayDesignationParser = choice ["R88" `means` AllRunways, oneRunway]
     where
         oneRunway = do
             _ <- char 'R'
-            magheading <- (\a b -> read [a,b]) <$> digit <*> digit :: Parser Int
+            magheading <- (\a b -> read [a,b]) <$> digit <*> digit
             dir <- Nothing `option` (Just <$> choice
                 [ "L" `means` RWYLeft
                 , "R" `means` RWYRight
                 , "C" `means` RWYCenter ])
-            return $ Runway magheading dir
+            return $ SpecificRunway magheading dir
 
-trendParser :: Parser Trend
+trendParser :: (Monad f, CharParsing f) => f Trend
 trendParser = choice
     [ "NOSIG" `means` NOSIG
     , changeParser ]
     where
-        changeParser :: Parser Trend
         changeParser = do
-            changes <- changesParser :: Parser [Trend]
+            changes <- changesParser
             when (length changes /= 1) $ fail "A METAR contains exactly one transition"
             return $ head changes
 
-changesParser :: Parser [Trend]
-changesParser = many1 $ skipSpace >> transitionTypeParser
+changesParser :: (Monad f, CharParsing f) => f [Trend]
+changesParser = some $ spaces >> transitionTypeParser
     where
-        transitionTypeParser :: Parser Trend
         transitionTypeParser = choice
                 [ "TEMPO" `callsfor` (TEMPO <$> transitionParser)
                 , "BECMG" `callsfor` (BECMG <$> transitionParser)
                 , "PROB" `callsfor`  (PROB  <$> twoDigits <*> (head <$> changesParser)) ]
-        transitionParser :: Parser [Transition]
-        transitionParser = sepBy1' oneTransition (char ' ')
+        transitionParser = sepBy1 oneTransition (char ' ')
         oneTransition = do
-            skipSpace
+            spaces
             choice . map try $
               [ TransClouds    <$> cloudParser
               , TransWind      <$> windParser
-              , TransVis       <$> many1' visibilityParser
+              , TransVis       <$> some visibilityParser
               , TransWX        <$> count 1 wxParser
-              , TransRunwayVis <$> sepBy' runwayvisParser (char ' ') ]
+              , TransRunwayVis <$> sepBy runwayvisParser (char ' ') ]
 
-twoDigits :: Parser Int
+twoDigits :: CharParsing f => f Int
 twoDigits = (\a b -> read [a,b]) <$> digit <*> digit
 
-metarParser :: Parser Weather
+metarParser :: (Monad f, CharParsing f) => f Weather
 metarParser = do
-    _ <- string "METAR"
+    _ <- text "METAR"
     reportflags <- flagsParser
-    identifier <- skipSpace >> stationParser
-    reportdate <- skipSpace >> dateParser
+    identifier <- spaces >> stationParser
+    reportdate <- spaces >> dateParser
     reportflags2 <- flagsParser
-    reportwind <- Nothing `option` (skipSpace >> Just <$> windParser)
-    skipSpace
-    reportvis <- [TenOrMore] `option` many1 visibilityParser
-    skipSpace
-    reportrunwaycond <- sepBy' runwayconditionParser (char ' ')
-    reportrunwayvis <- sepBy' runwayvisParser (char ' ')
-    reportwx <- many' wxParser
-    reportclouds <- [] `option` (skipSpace >> cloudParser)
-    (reporttemp, reportdewpoint) <- (Nothing, Nothing) `option` (skipSpace >> tdParser >>= \(w,d) -> return (Just w, Just d))
-    reportpressure <- Nothing `option` (skipSpace >> Just <$> pressureParser)
-    void $ many' $ skipSpace >> pressureParser -- Sometimes, multiple pressure values are offered
-    skipSpace
+    reportwind <- Nothing `option` (spaces >> Just <$> windParser)
+    spaces
+    reportvis <- [TenOrMore] `option` some visibilityParser
+    spaces
+    reportrunwaycond <- sepBy runwayconditionParser (char ' ')
+    reportrunwayvis <- sepBy runwayvisParser (char ' ')
+    reportwx <- many wxParser
+    reportclouds <- [] `option` (spaces >> cloudParser)
+    (reporttemp, reportdewpoint) <- (Nothing, Nothing) `option` (spaces >> tdParser >>= \(w,d) -> return (Just w, Just d))
+    reportpressure <- Nothing `option` (spaces >> Just <$> pressureParser)
+    void $ many $ spaces >> pressureParser -- Sometimes, multiple pressure values are offered
+    spaces
     reporttrend <- NOTAVAIL `option` trendParser
     reportrmk <- maybeRMK
-    skipSpace
-    _ <- choice $ map char "=$"
+    spaces
+    maintenance' <- or <$> optional (True <$ char '$' <|> False <$ char '=')
     return $ METAR reportdate identifier (reportflags ++ reportflags2)
         reportwind reportvis reportrunwayvis reportrunwaycond reportwx
         reportclouds reportpressure reporttemp reportdewpoint
-        reporttrend reportrmk
+        reporttrend reportrmk maintenance'
 
-maybeRMK :: Parser (Maybe Text)
+maybeRMK :: (Monad f, CharParsing f) => f (Maybe Text)
 maybeRMK = Nothing `option` do
-    void $ choice [ string "RMK ", string " RMK " ]
-    Just . pack <$> many1 (satisfy (notInClass "$="))
+    void $ choice [ text "RMK ", text " RMK " ]
+    Just . pack <$> some (satisfy (`notElem` ("$=" :: String)))
 
 -- | An attoparsec parser that can parse METAR messages.
-weatherParser :: Parser Weather
+weatherParser :: (Monad f, CharParsing f) => f Weather
 weatherParser = metarParser
-
-maybeOneSpace :: Parser ()
-maybeOneSpace = perhaps_ space
-
--- | Parse the given METAR text.
-parseWeather :: Text -> Either String Weather
-parseWeather = parseOnly weatherParser
